@@ -1,0 +1,10 @@
+# sessão do WhatsApp: quem tiver estes arquivos controla o número do bot
+auth/
+auth-*/
+
+# fotos/vídeos originais dos usuários e log com números de telefone
+originais/
+bot.log
+
+node_modules/
+figurinha.webp

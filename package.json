@@ -1,0 +1,20 @@
+{
+  "name": "bot-figurinha",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot de WhatsApp que transforma foto, vídeo e GIF em figurinha com !s",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "baileys": "^7.0.0-rc14",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.35.4"
+  }
+}
