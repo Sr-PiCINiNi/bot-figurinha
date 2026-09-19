@@ -1,0 +1,516 @@
+// Conexão com o WhatsApp (Baileys): recebe mídias para o painel e atende o comando !s.
+//
+// Visualização única não chega em aparelho conectado (limitação do servidor do WhatsApp): ela entra no
+// painel como card bloqueado. Quando alguém responde a ela com !s pelo celular, a resposta traz uma cópia
+// da mídia com a chave de download, e o card é preenchido.
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  downloadMediaMessage,
+  fetchLatestBaileysVersion,
+  jidNormalizedUser,
+  normalizeMessageContent,
+  Browsers,
+  BufferJSON,
+} from 'baileys'
+import pino from 'pino'
+import qrcodeTerminal from 'qrcode-terminal'
+import { EventEmitter } from 'node:events'
+import { readFile, renameSync } from 'node:fs'
+import { promisify } from 'node:util'
+import path from 'node:path'
+import { log, logErro } from './log.js'
+import { mediaToSticker, stickerToMedia } from './sticker.js'
+import * as store from './store.js'
+
+const lerArquivo = promisify(readFile)
+
+// ---- configuração ----
+const DEBUG = !!process.env.DEBUG
+// números que podem usar o !s (só dígitos, com DDI). Vazio = qualquer um
+const AUTORIZADOS = []
+// quantas conversões/downloads rodam ao mesmo tempo (o resto espera na fila)
+const MAX_SIMULTANEAS = 2
+// !s enviado com o bot desligado ainda é atendido se tiver até isto de atraso
+const ATRASO_MAX_COMANDO = 10 * 60
+// mídias maiores que isto não são baixadas automaticamente para o painel
+const MAX_AUTO_MB = 64
+// "!s", ".s", "/s", "!fig", "!sticker" (no texto ou na legenda)
+const COMANDO = /^[!./](s|fig|figurinha|sticker)(\s|$)/i
+
+export const wa = new EventEmitter()
+export const estado = { status: 'iniciando', qr: null, eu: null, detalhe: '' }
+let sock = null
+const startedAt = Math.floor(Date.now() / 1000)
+let falhas = 0
+let conflitos = 0
+let tentativaTimer = null
+
+function mudarEstado(patch) {
+  Object.assign(estado, patch)
+  wa.emit('estado', { ...estado })
+}
+
+// ---- utilidades de mensagem ----
+
+// devolve { media, animada } para foto/vídeo/GIF (também enviados como documento)
+function getMedia(m) {
+  if (!m) return null
+  if (m.videoMessage) return { media: m.videoMessage, animada: true, gif: !!m.videoMessage.gifPlayback }
+  if (m.imageMessage) return { media: m.imageMessage, animada: false }
+  const mime = m.documentMessage?.mimetype ?? ''
+  if (mime === 'image/gif' || mime.startsWith('video/')) return { media: m.documentMessage, animada: true, gif: mime === 'image/gif' }
+  if (mime.startsWith('image/')) return { media: m.documentMessage, animada: false }
+  return null
+}
+
+function temChave(media) {
+  return !!media?.mediaKey?.length && !!(media.url || media.directPath)
+}
+
+function getText(m) {
+  if (!m) return ''
+  return m.conversation ?? m.extendedTextMessage?.text ?? m.imageMessage?.caption ??
+    m.videoMessage?.caption ?? m.documentMessage?.caption ?? ''
+}
+
+// contextInfo fica dentro do tipo da mensagem (extendedTextMessage, imageMessage, ...)
+function getContextInfo(m) {
+  if (!m) return null
+  for (const value of Object.values(m)) {
+    if (value?.contextInfo) return value.contextInfo
+  }
+  return null
+}
+
+function ehVisualizacaoUnica(raw, media) {
+  return !!(media?.viewOnce || raw?.viewOnceMessage || raw?.viewOnceMessageV2 || raw?.viewOnceMessageV2Extension)
+}
+
+function digits(jid) {
+  return jid ? jidNormalizedUser(jid).split('@')[0].replace(/\D/g, '') : ''
+}
+
+function toSeconds(ts) {
+  return Number(ts?.toNumber?.() ?? ts)
+}
+
+function toNumber(v) {
+  return Number(v?.toNumber?.() ?? v ?? 0)
+}
+
+function extensao(mimetype, animada) {
+  const sub = (mimetype ?? '').split('/')[1]?.split(';')[0]
+  if (sub === 'jpeg') return 'jpg'
+  if (sub && /^[a-z0-9]+$/.test(sub)) return sub
+  return animada ? 'mp4' : 'jpg'
+}
+
+// o número de quem mandou (em grupo é o participante), preferindo o formato de telefone
+function remetenteDe(key) {
+  const opcoes = [key.participantAlt, key.participant, key.remoteJidAlt, key.remoteJid].filter(Boolean)
+  return opcoes.find(j => j.endsWith('@s.whatsapp.net')) ?? opcoes.find(j => !j.endsWith('@g.us')) ?? ''
+}
+
+function serializar(msg) {
+  return JSON.stringify({ key: msg.key, message: msg.message, messageTimestamp: msg.messageTimestamp },
+    BufferJSON.replacer)
+}
+
+function desserializar(texto) {
+  return texto ? JSON.parse(texto, BufferJSON.reviver) : null
+}
+
+const nomesDeGrupo = new Map()
+async function nomeDoGrupo(jid) {
+  if (nomesDeGrupo.has(jid)) return nomesDeGrupo.get(jid)
+  let nome = 'Grupo'
+  try {
+    nome = (await sock.groupMetadata(jid)).subject || nome
+  } catch {}
+  nomesDeGrupo.set(jid, nome)
+  return nome
+}
+
+// ---- fila: no máximo MAX_SIMULTANEAS conversões ao mesmo tempo ----
+let rodando = 0
+const esperando = []
+async function naFila(fn) {
+  if (rodando >= MAX_SIMULTANEAS) await new Promise(resolve => esperando.push(resolve))
+  rodando++
+  try {
+    return await fn()
+  } finally {
+    rodando--
+    esperando.shift()?.()
+  }
+}
+
+// ---- conexão ----
+
+export async function iniciarWhatsApp() {
+  clearTimeout(tentativaTimer)
+  const { state, saveCreds } = await useMultiFileAuthState('auth')
+  const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
+  const atual = makeWASocket({
+    version,
+    auth: state,
+    logger: pino({ level: DEBUG ? 'debug' : 'silent' }),
+    // registra o aparelho como Desktop (Windows); a sessão atual foi pareada assim. syncFullHistory
+    // precisa ficar false (o padrão do Baileys é true): com ele o WhatsApp recusa o login (erro 428).
+    browser: Browsers.windows('Desktop'),
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+  })
+  sock = atual
+
+  atual.ev.on('creds.update', saveCreds)
+
+  atual.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (sock !== atual) return // evento de uma conexão antiga
+    if (qr) {
+      mudarEstado({ status: 'qr', qr, detalhe: 'Escaneie o QR Code com o celular do bot' })
+      if (process.stdout.isTTY) qrcodeTerminal.generate(qr, { small: true })
+    }
+    if (connection === 'open') {
+      falhas = 0
+      const eu = { id: atual.user?.id, nome: atual.user?.name ?? '', numero: digits(atual.user?.id) }
+      mudarEstado({ status: 'conectado', qr: null, eu, detalhe: '' })
+      log(`✅ Conectado como ${eu.nome || eu.numero}`)
+      // conflito só zera depois de ficar 1 min conectado sem ser derrubado
+      setTimeout(() => { if (sock === atual && estado.status === 'conectado') conflitos = 0 }, 60_000)
+    }
+    if (connection === 'close') tratarQueda(lastDisconnect)
+  })
+
+  atual.ev.on('messages.upsert', async ({ messages, type }) => {
+    for (const msg of messages) {
+      try {
+        await tratarMensagem(msg, type)
+      } catch (err) {
+        logErro('Erro ao tratar mensagem:', err.stack ?? err.message)
+      }
+    }
+  })
+}
+
+function tratarQueda(lastDisconnect) {
+  const code = lastDisconnect?.error?.output?.statusCode
+  const motivo = lastDisconnect?.error?.message ?? 'sem detalhe'
+
+  if (code === DisconnectReason.loggedOut) {
+    // sessão removida no celular: guarda a pasta antiga e pede um QR novo
+    const antiga = `auth-expirado-${Date.now()}`
+    try { renameSync('auth', antiga) } catch {}
+    log(`Sessão encerrada no celular (pasta antiga em ${antiga}). Gerando QR novo...`)
+    mudarEstado({ status: 'reconectando', eu: null, detalhe: 'Sessão encerrada no celular — gerando QR novo' })
+    tentativaTimer = setTimeout(iniciarWhatsApp, 2000)
+    return
+  }
+
+  if (code === DisconnectReason.connectionReplaced) {
+    // 440: outra cópia do bot conectou com a mesma sessão; ficar tentando só faz as duas se derrubarem
+    conflitos++
+    if (conflitos >= 3) {
+      logErro('⚠️ Outra cópia do bot está usando esta sessão. Parei de reconectar — feche a outra cópia ' +
+              'e clique em "Reconectar" no painel.')
+      mudarEstado({ status: 'conflito', detalhe: 'Outra cópia do bot está conectada com este número' })
+      return
+    }
+    log(`⚠️ Outra conexão assumiu a sessão (${conflitos}/3). Tentando de novo em 30s...`)
+    mudarEstado({ status: 'reconectando', detalhe: 'Outra conexão assumiu a sessão' })
+    tentativaTimer = setTimeout(iniciarWhatsApp, 30_000)
+    return
+  }
+
+  // espera cada vez mais entre tentativas (até 1 min) para não martelar o servidor
+  const espera = Math.min(60, 2 ** falhas++)
+  log(`Conexão caiu (código ${code ?? '?'}: ${motivo}), reconectando em ${espera}s...`)
+  mudarEstado({ status: 'reconectando', detalhe: `Conexão caiu (${code ?? '?'}) — tentando em ${espera}s` })
+  tentativaTimer = setTimeout(iniciarWhatsApp, espera * 1000)
+}
+
+// botão "Reconectar" do painel
+export function reconectar() {
+  conflitos = 0
+  falhas = 0
+  try { sock?.end(undefined) } catch {}
+  mudarEstado({ status: 'reconectando', detalhe: 'Reconectando...' })
+  iniciarWhatsApp().catch(err => logErro('Falha ao reconectar:', err.message))
+}
+
+// ---- mensagens ----
+
+async function tratarMensagem(msg, type) {
+  const jid = msg.key.remoteJid
+  if (!jid || jid === 'status@broadcast' || jid.endsWith('@newsletter') || jid.endsWith('@broadcast')) return
+  const content = normalizeMessageContent(msg.message)
+  if (content?.protocolMessage || content?.reactionMessage) return
+
+  if (COMANDO.test(getText(content).trim())) {
+    await tratarComando(msg, content)
+    return
+  }
+  // mídias novas de outras pessoas vão para o painel (append = histórico; fromMe = o próprio bot)
+  if (type === 'notify' && !msg.key.fromMe) await receberMidia(msg, content)
+}
+
+// dados comuns de um item da biblioteca a partir da mensagem
+async function dadosBase(msg, chat) {
+  const grupo = chat.endsWith('@g.us')
+  const remetente = remetenteDe(msg.key)
+  const remetenteNome = msg.pushName || digits(remetente)
+  return {
+    chat,
+    grupo,
+    chatNome: grupo ? await nomeDoGrupo(chat) : remetenteNome,
+    remetente: digits(remetente),
+    remetenteNome,
+  }
+}
+
+async function receberMidia(msg, content) {
+  const chat = msg.key.remoteJid
+  const id = store.idPara(chat, msg.key.id)
+  if (store.obter(id)?.disponivel) return
+  const recebidoEm = toSeconds(msg.messageTimestamp) * 1000 || Date.now()
+
+  // visualização única chega vazia: vira card bloqueado até alguém responder com !s pelo celular
+  if (!content && msg.key.isViewOnce) {
+    if (store.obter(id)) return
+    const base = await dadosBase(msg, chat)
+    store.adicionar({
+      id, categoria: 'visualizacao-unica', animada: false, tipo: 'desconhecido', recebidoEm, ...base,
+      disponivel: false, motivo: 'visualizacao-unica', figurinhas: [], msg: serializar(msg),
+    })
+    log(`👁️ Visualização única de ${base.remetenteNome} em ${base.chatNome} (bloqueada pelo WhatsApp)`)
+    return
+  }
+
+  const found = getMedia(content)
+  if (!found) return
+  const base = await dadosBase(msg, chat)
+  const item = store.adicionar({
+    id,
+    categoria: ehVisualizacaoUnica(msg.message, found.media) ? 'visualizacao-unica' : 'normais',
+    animada: found.animada,
+    tipo: found.gif ? 'gif' : found.animada ? 'video' : 'foto',
+    mimetype: found.media.mimetype,
+    legenda: found.media.caption ?? '',
+    recebidoEm,
+    ...base,
+    disponivel: false,
+    motivo: 'baixando',
+    figurinhas: [],
+    msg: serializar(msg),
+  })
+
+  const tamanho = toNumber(found.media.fileLength)
+  if (tamanho > MAX_AUTO_MB * 1_048_576) {
+    store.atualizar(id, { motivo: 'grande', tamanho })
+    log(`📥 ${item.tipo} de ${base.remetenteNome} em ${base.chatNome} é grande demais para baixar automaticamente`)
+    return
+  }
+  await baixarPara(item, msg, content, found)
+  log(`📥 ${item.tipo} de ${base.remetenteNome} em ${base.chatNome}`)
+}
+
+// baixa a mídia de uma mensagem (content = conteúdo que tem a mídia) e guarda no item
+async function baixarPara(item, msg, content, found) {
+  try {
+    const buffer = await naFila(() => downloadMediaMessage({ key: msg.key, message: content }, 'buffer', {},
+      { logger: sock.logger, reuploadRequest: sock.updateMediaMessage }))
+    return await store.guardarArquivo(item, buffer, extensao(found.media.mimetype, found.animada))
+  } catch (err) {
+    store.atualizar(item.id, { disponivel: false, motivo: 'erro' })
+    throw err
+  }
+}
+
+async function tratarComando(msg, content) {
+  const jid = msg.key.remoteJid
+  const ts = toSeconds(msg.messageTimestamp)
+  log(`📩 !s ${jid.endsWith('@g.us') ? 'no grupo' : 'no privado'} de ${msg.pushName || digits(remetenteDe(msg.key))}`)
+
+  if (!msg.key.fromMe && AUTORIZADOS.length) {
+    const quem = [msg.key.participant, msg.key.participantAlt, jid, msg.key.remoteJidAlt].filter(Boolean)
+    if (!quem.some(j => AUTORIZADOS.includes(digits(j)))) {
+      log('   ↳ ignorado: remetente não autorizado')
+      return
+    }
+  }
+  // tolera !s mandado enquanto o bot reiniciava, mas não reprocessa histórico antigo
+  if (ts < startedAt - ATRASO_MAX_COMANDO) {
+    log(`   ↳ ignorado: comando de ${Math.round((startedAt - ts) / 60)} min antes do bot ligar`)
+    return
+  }
+
+  const responder = texto => sock.sendMessage(jid, { text: texto }, { quoted: msg }).catch(() => {})
+
+  // mídia com !s na legenda
+  const propria = getMedia(content)
+  if (propria) {
+    const base = await dadosBase(msg, jid)
+    const id = store.idPara(jid, msg.key.id)
+    const item = store.obter(id)?.disponivel ? store.obter(id) : store.adicionar({
+      id,
+      categoria: ehVisualizacaoUnica(msg.message, propria.media) ? 'visualizacao-unica' : 'normais',
+      animada: propria.animada, tipo: propria.gif ? 'gif' : propria.animada ? 'video' : 'foto',
+      mimetype: propria.media.mimetype, legenda: propria.media.caption ?? '',
+      recebidoEm: ts * 1000 || Date.now(), ...base, disponivel: false, motivo: 'baixando', figurinhas: [],
+      msg: serializar(msg),
+    })
+    await comReacao(msg, async () => {
+      const pronto = item.disponivel ? item : await baixarPara(item, msg, content, propria)
+      await enviarFigurinha(pronto, msg)
+    }, responder)
+    return
+  }
+
+  const ctx = getContextInfo(content)
+  const quoted = normalizeMessageContent(ctx?.quotedMessage)
+  if (!quoted) {
+    await responder('Responda com *!s* a uma foto, vídeo ou GIF para virar figurinha, ' +
+      'ou a uma figurinha para ela voltar a ser foto/vídeo 😉')
+    return
+  }
+
+  // !s respondendo uma figurinha: desfaz em foto/vídeo
+  if (quoted.stickerMessage) {
+    const st = quoted.stickerMessage
+    if (st.isLottie || st.mimetype === 'application/was') {
+      await responder('Essa figurinha é do tipo Lottie, não consigo desfazer 😕')
+    } else if (!temChave(st)) {
+      await responder('Não veio a figurinha junto com a resposta 😕 Tente de novo.')
+    } else {
+      await comReacao(msg, () => desfazerFigurinha(msg, quoted), responder)
+    }
+    return
+  }
+
+  const q = getMedia(quoted)
+  if (!q) {
+    await responder('Responda com *!s* a uma foto, vídeo ou GIF 😉')
+    return
+  }
+
+  // a resposta aponta para a mensagem original (stanzaId): é o mesmo item do painel,
+  // inclusive o card bloqueado de visualização única, que agora ganha o arquivo
+  const idOriginal = ctx.stanzaId ? store.idPara(jid, ctx.stanzaId) : store.idPara(jid, msg.key.id)
+  let item = store.obter(idOriginal)
+  if (!item?.disponivel && !temChave(q.media)) {
+    log('   ↳ a cópia citada veio sem a chave da mídia')
+    await responder('Não veio a mídia junto com a resposta 😕 Tente de novo pelo celular.')
+    return
+  }
+
+  const keyOriginal = {
+    remoteJid: jid,
+    id: ctx.stanzaId,
+    fromMe: false,
+    participant: ctx.participant || undefined,
+  }
+  const msgOriginal = { key: keyOriginal, message: ctx.quotedMessage, messageTimestamp: msg.messageTimestamp }
+  if (!item) {
+    const base = await dadosBase({ key: keyOriginal, pushName: null }, jid)
+    item = store.adicionar({
+      id: idOriginal,
+      categoria: 'normais', animada: q.animada, tipo: q.gif ? 'gif' : q.animada ? 'video' : 'foto',
+      recebidoEm: ts * 1000 || Date.now(), ...base, legenda: q.media.caption ?? '',
+      disponivel: false, motivo: 'baixando', figurinhas: [], msg: serializar(msgOriginal),
+    })
+  }
+  const visu = ehVisualizacaoUnica(ctx.quotedMessage, q.media) || item.categoria === 'visualizacao-unica'
+  if (!item.disponivel) {
+    item = store.atualizar(item.id, {
+      categoria: visu ? 'visualizacao-unica' : item.categoria,
+      animada: q.animada, tipo: q.gif ? 'gif' : q.animada ? 'video' : 'foto',
+      mimetype: q.media.mimetype, motivo: 'baixando',
+    })
+  }
+  log(`   ↳ usando a mídia citada${visu ? ' (visualização única)' : ''}`)
+  await comReacao(msg, async () => {
+    const pronto = item.disponivel ? item : await baixarPara(item, msgOriginal, quoted, q)
+    await enviarFigurinha(pronto, msg)
+  }, responder)
+}
+
+// ⏳ enquanto trabalha; em caso de erro, avisa na conversa
+async function comReacao(msg, fn, responder) {
+  const jid = msg.key.remoteJid
+  await sock.sendMessage(jid, { react: { text: '⏳', key: msg.key } }).catch(() => {})
+  try {
+    await fn()
+  } catch (err) {
+    logErro('❌ Erro:', err.stderr?.trim() || err.message)
+    await responder(`Não consegui: ${err.message}`)
+  } finally {
+    await sock.sendMessage(jid, { react: { text: '', key: msg.key } }).catch(() => {})
+  }
+}
+
+// converte o arquivo do item em figurinha e manda respondendo `quoted` (ou a mensagem original)
+async function enviarFigurinha(item, quoted) {
+  const buffer = await lerArquivo(store.caminhoArquivo(item))
+  const sticker = await naFila(() => mediaToSticker(buffer, item.animada))
+  const alvo = quoted ?? desserializar(item.msg)
+  const sent = await sock.sendMessage(item.chat, { sticker, isAnimated: item.animada }, alvo ? { quoted: alvo } : {})
+  const hash = sent?.message?.stickerMessage?.fileSha256
+  store.atualizar(item.id, {
+    figurinhas: [...(item.figurinhas ?? []), { hash: hash ? Buffer.from(hash).toString('hex') : null, em: Date.now() }],
+  })
+  log(`✅ Figurinha enviada em ${item.chatNome}`)
+}
+
+// clique no painel
+export async function fazerFigurinhaDoPainel(id) {
+  if (estado.status !== 'conectado') throw new Error('o bot não está conectado ao WhatsApp')
+  const item = store.obter(id)
+  if (!item) throw new Error('mídia não encontrada')
+  if (!item.disponivel) {
+    throw new Error(item.motivo === 'visualizacao-unica'
+      ? 'o WhatsApp não entrega visualização única ao bot — responda a ela com !s pelo celular'
+      : 'essa mídia não foi baixada')
+  }
+  await enviarFigurinha(item, null)
+}
+
+// !s numa figurinha: devolve o original (se foi feita aqui) ou reconverte a própria figurinha
+async function desfazerFigurinha(msg, quoted) {
+  const jid = msg.key.remoteJid
+  const hash = quoted.stickerMessage.fileSha256
+  const hex = hash?.length ? Buffer.from(hash).toString('hex') : null
+  const item = hex ? store.porHashDeFigurinha(hex) : null
+  const original = item
+    ? { buffer: await lerArquivo(store.caminhoArquivo(item)), mimetype: item.mimetype ?? '' }
+    : await originalAntigo(hex)
+  if (original) {
+    const { buffer, mimetype } = original
+    const content = mimetype.startsWith('video/') ? { video: buffer, mimetype }
+      : mimetype === 'image/gif' ? { document: buffer, mimetype, fileName: 'original.gif' }
+      : mimetype.startsWith('image/') ? { image: buffer, mimetype }
+      : { document: buffer, mimetype, fileName: 'original' }
+    await sock.sendMessage(jid, content, { quoted: msg })
+    log(`✅ Original devolvido em qualidade total (${(buffer.length / 1024).toFixed(0)} KB)`)
+    return
+  }
+  log('   original não guardado — reconvertendo a figurinha')
+  const buffer = await downloadMediaMessage({ key: msg.key, message: quoted }, 'buffer', {},
+    { logger: sock.logger, reuploadRequest: sock.updateMediaMessage })
+  const result = await naFila(() => stickerToMedia(buffer))
+  await sock.sendMessage(jid, result.video ? { video: result.video, mimetype: 'video/mp4' } : { image: result.image },
+    { quoted: msg })
+  log(`✅ Figurinha desfeita em ${result.video ? 'vídeo' : 'foto'}`)
+}
+
+// figurinhas feitas antes do painel guardavam o original em originais/<hash>.bin
+async function originalAntigo(hex) {
+  if (!hex) return null
+  try {
+    const base = path.join('originais', hex)
+    const { mimetype } = JSON.parse(await lerArquivo(`${base}.json`, 'utf8'))
+    return { buffer: await lerArquivo(`${base}.bin`), mimetype }
+  } catch {
+    return null
+  }
+}

@@ -2,9 +2,12 @@
 auth/
 auth-*/
 
-# fotos/vídeos originais dos usuários e log com números de telefone
+# fotos/vídeos recebidos, originais das figurinhas e logs (têm números de telefone)
+midia/
 originais/
 bot.log
+bot.old.log
+bot.lock
 
 node_modules/
 figurinha.webp

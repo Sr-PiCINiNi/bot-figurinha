@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bot Figurinha</title>
+  <link rel="icon" href="icone.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="lateral">
+    <div class="marca">
+      <img src="icone.svg" alt="" width="36" height="36">
+      <div>
+        <strong>Bot Figurinha</strong>
+        <span id="numero" class="sutil">—</span>
+      </div>
+    </div>
+
+    <div id="conexao" class="conexao" data-status="iniciando">
+      <span class="ponto"></span>
+      <span id="conexao-texto">Iniciando...</span>
+    </div>
+
+    <nav id="pastas" aria-label="Pastas">
+      <button class="pasta" data-filtro="tudo" aria-current="true">
+        <span class="pasta-icone">🗂️</span> Tudo <span class="contador" data-conta="tudo">0</span>
+      </button>
+
+      <div class="grupo-pastas">
+        <span class="grupo-titulo">👁️ Visualização única</span>
+        <button class="pasta sub" data-filtro="visualizacao-unica:foto">
+          Fotos <span class="contador" data-conta="visualizacao-unica:foto">0</span>
+        </button>
+        <button class="pasta sub" data-filtro="visualizacao-unica:video">
+          Vídeos <span class="contador" data-conta="visualizacao-unica:video">0</span>
+        </button>
+        <button class="pasta sub" data-filtro="visualizacao-unica:bloqueada">
+          Bloqueadas <span class="contador" data-conta="visualizacao-unica:bloqueada">0</span>
+        </button>
+      </div>
+
+      <div class="grupo-pastas">
+        <span class="grupo-titulo">🖼️ Normais</span>
+        <button class="pasta sub" data-filtro="normais:foto">
+          Fotos <span class="contador" data-conta="normais:foto">0</span>
+        </button>
+        <button class="pasta sub" data-filtro="normais:video">
+          Vídeos <span class="contador" data-conta="normais:video">0</span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="rodape-lateral">
+      <button id="abrir-pasta" class="botao-texto">📁 Abrir pasta das mídias</button>
+      <button id="mostrar-atividade" class="botao-texto">📜 Atividade</button>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topo">
+      <div>
+        <h1 id="titulo">Tudo</h1>
+        <p id="subtitulo" class="sutil">Clique numa mídia para fazer a figurinha e enviar na conversa de onde ela veio.</p>
+      </div>
+      <div class="filtros">
+        <input id="busca" type="search" placeholder="Buscar conversa ou pessoa..." aria-label="Buscar">
+        <select id="filtro-chat" aria-label="Conversa">
+          <option value="">Todas as conversas</option>
+        </select>
+      </div>
+    </header>
+
+    <section id="aviso-visu" class="aviso" hidden>
+      <strong>Por que algumas estão bloqueadas?</strong>
+      O WhatsApp não entrega o conteúdo de visualização única a aparelhos conectados (como o bot).
+      Para liberar, <b>responda a ela com !s pelo celular</b>: a foto chega junto com a resposta, a figurinha
+      é feita e o card aqui é preenchido.
+    </section>
+
+    <section id="conectar" class="conectar" hidden>
+      <div class="qr-caixa">
+        <div id="qr"></div>
+      </div>
+      <div>
+        <h2>Conecte o número do bot</h2>
+        <ol>
+          <li>Abra o WhatsApp no celular do bot</li>
+          <li>Configurações → <b>Dispositivos conectados</b></li>
+          <li>Toque em <b>Conectar dispositivo</b> e aponte para o código</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="conflito" class="aviso erro" hidden>
+      <strong>Outra cópia do bot está conectada com este número.</strong>
+      Feche a outra cópia (em outro computador/servidor ou outra janela) e clique em reconectar.
+      <button id="reconectar" class="botao">Reconectar</button>
+    </section>
+
+    <div id="grade" class="grade" aria-live="polite"></div>
+    <div id="vazio" class="vazio" hidden>
+      <div class="vazio-icone">🫙</div>
+      <p>Nada aqui ainda.</p>
+      <p class="sutil">As fotos e vídeos que chegarem no WhatsApp do bot aparecem aqui na hora.</p>
+    </div>
+  </main>
+
+  <aside id="atividade" class="atividade" hidden>
+    <header>
+      <strong>Atividade</strong>
+      <button id="fechar-atividade" class="botao-icone" aria-label="Fechar">✕</button>
+    </header>
+    <ol id="linhas"></ol>
+  </aside>
+
+  <div id="avisos" class="avisos" aria-live="assertive"></div>
+
+  <template id="card">
+    <article class="card">
+      <button class="card-principal">
+        <div class="miniatura">
+          <img alt="" loading="lazy">
+          <span class="selo"></span>
+          <span class="duracao"></span>
+          <div class="sobreposicao"><span>✨ Fazer figurinha</span></div>
+          <div class="trabalhando"><span class="giro"></span></div>
+        </div>
+        <div class="info">
+          <span class="chat"></span>
+          <span class="detalhe sutil"></span>
+        </div>
+      </button>
+      <div class="acoes">
+        <span class="feitas sutil"></span>
+        <button class="botao-icone mostrar" title="Mostrar no Explorer" aria-label="Mostrar no Explorer">📂</button>
+        <button class="botao-icone apagar" title="Apagar" aria-label="Apagar">🗑️</button>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
