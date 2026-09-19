@@ -3,7 +3,7 @@
 import http from 'node:http'
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import path from 'node:path'
 import QRCode from 'qrcode'
 import { log, logErro, logEvents, linhasRecentes } from './log.js'
@@ -40,6 +40,12 @@ function lerCorpo(req) {
       try { resolve(JSON.parse(corpo || '{}')) } catch { reject(new Error('JSON inválido')) }
     })
   })
+}
+
+// O Explorer só entende /select,"caminho" exatamente assim; se o Node puser aspas em volta do argumento
+// inteiro (o que faz quando o caminho tem espaço), ele ignora o caminho e abre outra pasta.
+function abrirExplorer(argumento) {
+  spawn('explorer.exe', [argumento], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore' }).unref()
 }
 
 function json(res, status, dados) {
@@ -144,7 +150,7 @@ async function rotear(req, res) {
     if (acao === 'mostrar' && metodo === 'POST') {
       // abre o Explorer com o arquivo selecionado
       const arquivo = store.caminhoArquivo(item)
-      if (arquivo && process.platform === 'win32') execFile('explorer.exe', [`/select,${path.resolve(arquivo)}`])
+      if (arquivo && process.platform === 'win32') abrirExplorer(`/select,"${path.resolve(arquivo)}"`)
       return json(res, 200, { ok: true })
     }
     if (!acao && metodo === 'DELETE') {
@@ -155,7 +161,7 @@ async function rotear(req, res) {
   }
 
   if (rota === '/api/abrir-pasta' && metodo === 'POST') {
-    if (process.platform === 'win32') execFile('explorer.exe', [path.resolve(store.RAIZ)])
+    if (process.platform === 'win32') abrirExplorer(`"${path.resolve(store.RAIZ)}"`)
     return json(res, 200, { ok: true })
   }
 

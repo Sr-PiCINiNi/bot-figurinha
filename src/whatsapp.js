@@ -184,6 +184,17 @@ export async function iniciarWhatsApp() {
     if (connection === 'close') tratarQueda(lastDisconnect)
   })
 
+  // confirmações de entrega das figurinhas (privado: messages.update; grupo: recibo de cada participante)
+  atual.ev.on('messages.update', updates => {
+    for (const { key, update } of updates) if (key.fromMe) registrarEntrega(key.id, update.status)
+  })
+  atual.ev.on('message-receipt.update', recibos => {
+    for (const { key, receipt } of recibos) {
+      if (!key.fromMe) continue
+      registrarEntrega(key.id, receipt.readTimestamp ? 4 : receipt.receiptTimestamp ? 3 : null)
+    }
+  })
+
   atual.ev.on('messages.upsert', async ({ messages, type }) => {
     for (const msg of messages) {
       try {
@@ -519,7 +530,35 @@ async function enviarFigurinha(item, quoted) {
   store.atualizar(item.id, {
     figurinhas: [...(item.figurinhas ?? []), { hash: hash ? Buffer.from(hash).toString('hex') : null, em: Date.now() }],
   })
-  log(`✅ Figurinha enviada em ${item.chatNome}`)
+  log(`✅ Figurinha enviada em ${item.chatNome} ${quoted ? '(pelo !s)' : '(pelo painel)'}`)
+  if (sent?.key?.id) acompanharEntrega(sent.key.id, item.chatNome)
+}
+
+// ---- entrega: o "enviada" acima só quer dizer que o servidor aceitou; aqui vemos se chegou nos celulares ----
+const STATUS_ENTREGA = { 0: '❌ erro', 2: '✓ no servidor', 3: '✓✓ entregue', 4: '✓✓ lida', 5: '✓✓ vista' }
+const acompanhadas = new Map() // id da mensagem -> { chatNome, status, timer }
+
+function acompanharEntrega(id, chatNome) {
+  const timer = setTimeout(() => {
+    const a = acompanhadas.get(id)
+    acompanhadas.delete(id)
+    if (a && (a.status ?? 0) < 3) {
+      logErro(`⚠️ A figurinha em ${chatNome} não foi confirmada como entregue em 2 min ` +
+              `(último status: ${STATUS_ENTREGA[a.status] ?? 'nenhum'})`)
+    }
+  }, 120_000)
+  acompanhadas.set(id, { chatNome, status: null, timer })
+}
+
+function registrarEntrega(id, status) {
+  const a = acompanhadas.get(id)
+  if (!a || status == null || status <= (a.status ?? -1)) return
+  a.status = status
+  log(`   ${STATUS_ENTREGA[status] ?? `status ${status}`} — figurinha em ${a.chatNome}`)
+  if (status >= 3) {
+    clearTimeout(a.timer)
+    acompanhadas.delete(id)
+  }
 }
 
 // clique no painel

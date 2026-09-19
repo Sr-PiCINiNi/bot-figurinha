@@ -93,7 +93,7 @@ export function caminhoThumb(item) {
 
 function limparNome(texto) {
   return String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 40) || 'chat'
+    .replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'conversa'
 }
 
 // grava o arquivo da mídia na pasta certa e gera miniatura; o nome ajuda a achar pelo Explorer
