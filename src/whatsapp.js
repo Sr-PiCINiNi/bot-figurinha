@@ -543,7 +543,7 @@ async function comReacao(msg, fn, responder) {
 async function enviarFigurinha(item, quoted) {
   const buffer = await lerArquivo(store.caminhoArquivo(item))
   const sticker = await naFila(() => mediaToSticker(buffer, item.animada))
-  const alvo = quoted ?? desserializar(item.msg)
+  const alvo = quoted ?? citacaoLeve(desserializar(item.msg))
   const sent = await sock.sendMessage(item.chat, { sticker, isAnimated: item.animada }, alvo ? { quoted: alvo } : {})
   const hash = sent?.message?.stickerMessage?.fileSha256
   store.atualizar(item.id, {
@@ -551,6 +551,21 @@ async function enviarFigurinha(item, quoted) {
   })
   log(`✅ Figurinha enviada em ${item.chatNome} ${quoted ? '(pelo !s)' : '(pelo painel)'}`)
   if (sent?.key?.id) acompanharEntrega(sent.key.id, item.chatNome)
+}
+
+// Resposta à mídia original pelo painel: cita só o que aparece na "caixinha" da resposta (tipo, legenda,
+// miniatura), como o próprio WhatsApp faz. Citando a mídia inteira (chave de download, url, hashes), a
+// figurinha chegava aos membros do grupo mas não aparecia nos outros aparelhos do número do bot.
+const CAMPOS_CITACAO = ['mimetype', 'caption', 'jpegThumbnail', 'width', 'height', 'seconds', 'gifPlayback']
+function citacaoLeve(msg) {
+  if (!msg?.key?.id) return null
+  const conteudo = normalizeMessageContent(msg.message) ?? {}
+  const tipo = ['imageMessage', 'videoMessage', 'documentMessage'].find(t => conteudo[t])
+  if (!tipo) return null
+  const leve = {}
+  for (const campo of CAMPOS_CITACAO) if (conteudo[tipo][campo] != null) leve[campo] = conteudo[tipo][campo]
+  if (typeof leve.jpegThumbnail === 'string') leve.jpegThumbnail = Buffer.from(leve.jpegThumbnail, 'base64')
+  return { key: msg.key, message: { [tipo]: leve } }
 }
 
 // ---- entrega: o "enviada" acima só quer dizer que o servidor aceitou; aqui vemos se chegou nos celulares ----
