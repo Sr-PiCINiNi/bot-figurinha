@@ -87,7 +87,9 @@ class Bandeja : ApplicationContext
     void IniciarBot()
     {
         if (saindo) return;
-        var info = new ProcessStartInfo("node", "bot.js")
+        // o instalador traz o Node em runtime\; fora dele, usa o que estiver no PATH
+        string nodeEmbutido = Path.Combine(pasta, "runtime", "node.exe");
+        var info = new ProcessStartInfo(File.Exists(nodeEmbutido) ? nodeEmbutido : "node", "bot.js")
         {
             WorkingDirectory = pasta,
             UseShellExecute = false,

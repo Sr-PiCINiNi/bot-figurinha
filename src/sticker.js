@@ -5,6 +5,8 @@ import { promisify } from 'node:util'
 import { mkdtemp, writeFile, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const run = promisify(execFile)
 const MAX_BYTES = 490_000 // WhatsApp aceita até ~500 KB em figurinha animada
@@ -16,7 +18,10 @@ const STATIC_QUALITIES = [90, 75, 60, 45, 30, 15]
 const FIT_512 = 'scale=512:512:force_original_aspect_ratio=decrease,format=rgba,' +
                 'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000'
 
+// o instalador traz o ffmpeg em runtime/; fora dele, usa o que estiver no PATH
 function findFfmpeg() {
+  const embutido = fileURLToPath(new URL(`../runtime/ffmpeg${process.platform === 'win32' ? '.exe' : ''}`, import.meta.url))
+  if (existsSync(embutido)) return embutido
   try {
     const cmd = process.platform === 'win32' ? 'where' : 'which'
     return execFileSync(cmd, ['ffmpeg'], { encoding: 'utf8' }).split(/\r?\n/)[0].trim() || 'ffmpeg'

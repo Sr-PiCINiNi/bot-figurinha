@@ -14,3 +14,8 @@ figurinha.webp
 
 # preferências do painel (de cada máquina)
 config.json
+
+# instalador: downloads e arquivos gerados
+instalador/cache/
+instalador/build/
+instalador/dist/

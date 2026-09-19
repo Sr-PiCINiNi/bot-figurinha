@@ -25,7 +25,28 @@ com `!s` pelo celular**: a resposta traz a foto junto, o bot faz a figurinha e o
 - **Desfazer:** responda a uma figurinha com `!s` e ela volta a ser foto/vídeo, em qualidade original se foi feita
   por este bot.
 
-## Instalar em outro computador
+## Instalar (Windows, sem precisar de nada)
+
+1. Baixe o **`BotFigurinha-Setup-<versão>.exe`** e abra.
+2. Se aparecer *"O Windows protegeu o computador"*, clique em **Mais informações → Executar assim mesmo**.
+   O aviso aparece porque o instalador não tem assinatura digital paga; não é vírus.
+3. Avançar → Instalar. Não pede administrador. O Node.js e o ffmpeg já vêm dentro dele.
+4. O painel abre sozinho: escaneie o QR Code com o celular do número do bot.
+
+Para desinstalar: *Configurações → Aplicativos → Bot Figurinha*. Ele pergunta se deve apagar também a conexão
+com o WhatsApp e as mídias. Responda "Não" se for reinstalar.
+
+### Gerar o instalador
+
+```bat
+winget install JRSoftware.InnoSetup
+instalador\gerar-instalador.bat
+```
+
+O resultado fica em `instalador\dist\`. Na primeira vez, o script baixa o ffmpeg essentials (gyan.dev) e confere
+o checksum. Para lançar uma versão nova, mude `version` no `package.json` antes de gerar.
+
+## Instalar pelo código (desenvolvedores)
 
 Precisa de **Node.js 20+**, **ffmpeg** e **git**.
 
