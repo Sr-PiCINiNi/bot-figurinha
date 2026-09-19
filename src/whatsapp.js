@@ -384,10 +384,26 @@ async function baixarPara(item, msg, content, found) {
   }
 }
 
-// !moeda e !d20. Quem está num cargo sem nenhuma permissão (ex.: Bloqueado) é ignorado, como no !s.
+// o cargo não libera o que foi pedido: avisa na conversa (ex.: "não permite: Comando !d20")
+async function recusar(msg, cargo, permissao) {
+  const oQue = usuarios.PERMISSOES[permissao]
+  log(`   ↳ negado: o cargo ${cargo.nome} não libera "${oQue}"`)
+  await sock.sendMessage(msg.key.remoteJid, { text: `🚫 Seu cargo (*${cargo.nome}*) não permite: ${oQue}.` },
+    { quoted: msg }).catch(() => {})
+}
+
+// !moeda e !d20, controlados pelo cargo como o !s. Cargo sem nenhuma permissão (ex.: Bloqueado) é ignorado
+// em silêncio; cargo que só não tem este comando recebe o aviso.
 async function tratarJogo(msg, jogo, autor) {
-  if (autor && !usuarios.podeAlgo(autor)) return
   if (toSeconds(msg.messageTimestamp) < startedAt - ATRASO_MAX_COMANDO) return
+  if (autor && !usuarios.podeAlgo(autor)) {
+    log(`🎲 !${jogo} de ${msg.pushName || autor} ignorado: o cargo não tem nenhuma permissão`)
+    return
+  }
+  if (autor && !usuarios.pode(autor, jogo)) {
+    await recusar(msg, usuarios.cargoDe(autor), jogo)
+    return
+  }
   let resposta
   if (jogo === 'moeda') {
     resposta = randomInt(2) ? '🪙 Deu *cara*!' : '🪙 Deu *coroa*!'
@@ -422,9 +438,7 @@ async function tratarComando(msg, content, autor) {
   // o cargo libera ou não cada tipo de mídia
   const negado = async permissao => {
     if (!autor || usuarios.pode(autor, permissao)) return false
-    log(`   ↳ negado: o cargo ${cargo.nome} não libera ${usuarios.PERMISSOES[permissao].toLowerCase()}`)
-    await responder(`🚫 Seu cargo (*${cargo.nome}*) não permite figurinha de ` +
-      `${usuarios.PERMISSOES[permissao].toLowerCase()}.`)
+    await recusar(msg, cargo, permissao)
     return true
   }
   const permissaoDe = (visu, animada) => visu ? 'visuUnica' : animada ? 'video' : 'foto'

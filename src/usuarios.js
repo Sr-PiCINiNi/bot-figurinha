@@ -8,17 +8,22 @@ import { logErro } from './log.js'
 
 const ARQUIVO = 'usuarios.json'
 
-// o que um cargo pode liberar no !s
+// o que um cargo pode fazer: figurinha com !s por tipo de mídia, e os comandos de sorteio
 export const PERMISSOES = {
-  foto: 'Fotos',
-  video: 'Vídeos e GIFs',
-  visuUnica: 'Visualização única',
+  foto: 'Figurinha de fotos',
+  video: 'Figurinha de vídeos e GIFs',
+  visuUnica: 'Figurinha de visualização única',
+  moeda: 'Comando !moeda',
+  d20: 'Comando !d20',
 }
 
 const CARGOS_INICIAIS = [
-  { id: 'bloqueado', nome: 'Bloqueado', cor: '#e5484d', permissoes: { foto: false, video: false, visuUnica: false } },
-  { id: 'comum', nome: 'Comum', cor: '#8696a0', permissoes: { foto: true, video: true, visuUnica: false } },
-  { id: 'vip', nome: 'VIP', cor: '#f5a524', permissoes: { foto: true, video: true, visuUnica: true } },
+  { id: 'bloqueado', nome: 'Bloqueado', cor: '#e5484d',
+    permissoes: { foto: false, video: false, visuUnica: false, moeda: false, d20: false } },
+  { id: 'comum', nome: 'Comum', cor: '#8696a0',
+    permissoes: { foto: true, video: true, visuUnica: false, moeda: true, d20: true } },
+  { id: 'vip', nome: 'VIP', cor: '#f5a524',
+    permissoes: { foto: true, video: true, visuUnica: true, moeda: true, d20: true } },
 ]
 
 export const usuariosEvents = new EventEmitter()
@@ -29,6 +34,14 @@ try {
   dados = { ...dados, ...JSON.parse(readFileSync(ARQUIVO, 'utf8')) }
 } catch (err) {
   if (err.code !== 'ENOENT') logErro('usuarios.json ilegível, começando com os cargos padrão:', err.message)
+}
+// cargos salvos antes de uma permissão existir: ela vem liberada para quem já podia alguma coisa
+// e negada para quem não podia nada (ex.: Bloqueado), para ninguém perder nem ganhar acesso de surpresa
+for (const cargo of dados.cargos) {
+  const podiaAlgo = Object.values(cargo.permissoes ?? {}).some(Boolean)
+  for (const chave of Object.keys(PERMISSOES)) {
+    if (!(chave in (cargo.permissoes ??= {}))) cargo.permissoes[chave] = podiaAlgo
+  }
 }
 
 // grava no máximo a cada 1s (chegam muitas mensagens), trocando o arquivo de uma vez
@@ -136,7 +149,8 @@ function validarCargo({ nome, cor, permissoes }, atual = {}) {
 }
 
 export function criarCargo(campos) {
-  const cargo = validarCargo({ cor: '#00a884', permissoes: {}, ...campos }, { permissoes: { foto: false, video: false, visuUnica: false } })
+  const nenhuma = Object.fromEntries(Object.keys(PERMISSOES).map(chave => [chave, false]))
+  const cargo = validarCargo({ cor: '#00a884', permissoes: {}, ...campos }, { permissoes: nenhuma })
   cargo.id = randomBytes(4).toString('hex')
   dados.cargos.push(cargo)
   avisarCargos()
