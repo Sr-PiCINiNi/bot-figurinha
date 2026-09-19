@@ -38,8 +38,19 @@ const ATRASO_MAX_COMANDO = 10 * 60
 const MAX_AUTO_MB = 64
 // "!s", ".s", "/s", "!fig", "!sticker" (no texto ou na legenda)
 const COMANDO = /^[!./](s|fig|figurinha|sticker)(\s|$)/i
-// comandos de sorteio: !moeda (cara ou coroa) e !d20 (1 a 20)
-const JOGO = /^[!./](moeda|d20)\s*$/i
+// comandos de sorteio: !moeda (cara ou coroa) e dados !NdM (N dados de M lados; !d20 = 1 dado de 20)
+const MOEDA = /^[!./]moeda\s*$/i
+const DADOS = /^[!./](\d*)d(\d+)\s*$/i
+const MAX_DADOS = 10
+const MAX_LADOS = 20
+
+// { tipo: 'moeda' } ou { tipo: 'dados', qtd, lados }; null se não for comando de sorteio
+function lerJogo(texto) {
+  if (MOEDA.test(texto)) return { tipo: 'moeda' }
+  const m = DADOS.exec(texto)
+  if (!m) return null
+  return { tipo: 'dados', qtd: m[1] === '' ? 1 : Number(m[1]), lados: Number(m[2]) }
+}
 
 export const wa = new EventEmitter()
 export const estado = { status: 'iniciando', qr: null, eu: null, detalhe: '' }
@@ -264,7 +275,7 @@ async function tratarMensagem(msg, type) {
   const texto = getText(content).trim()
   // com o !s desligado no painel, o comando vira mensagem comum (a mídia ainda vai para o painel)
   const comando = config.comandoAtivo && COMANDO.test(texto)
-  const jogo = JOGO.exec(texto)?.[1]?.toLowerCase()
+  const jogo = lerJogo(texto)
   // todo mundo que manda mensagem entra na lista de usuários do painel (o número do bot não)
   const autor = msg.key.fromMe ? null : await quemMandou(msg)
   if (autor && type === 'notify') {
@@ -396,23 +407,37 @@ async function recusar(msg, cargo, permissao) {
 // em silêncio; cargo que só não tem este comando recebe o aviso.
 async function tratarJogo(msg, jogo, autor) {
   if (toSeconds(msg.messageTimestamp) < startedAt - ATRASO_MAX_COMANDO) return
+  const nome = jogo.tipo === 'moeda' ? '!moeda' : `!${jogo.qtd}d${jogo.lados}`
   if (autor && !usuarios.podeAlgo(autor)) {
-    log(`🎲 !${jogo} de ${msg.pushName || autor} ignorado: o cargo não tem nenhuma permissão`)
+    log(`🎲 ${nome} de ${msg.pushName || autor} ignorado: o cargo não tem nenhuma permissão`)
     return
   }
-  if (autor && !usuarios.pode(autor, jogo)) {
-    await recusar(msg, usuarios.cargoDe(autor), jogo)
+  if (autor && !usuarios.pode(autor, jogo.tipo)) {
+    await recusar(msg, usuarios.cargoDe(autor), jogo.tipo)
     return
   }
-  let resposta
-  if (jogo === 'moeda') {
-    resposta = randomInt(2) ? '🪙 Deu *cara*!' : '🪙 Deu *coroa*!'
-  } else {
-    const n = randomInt(1, 21)
-    resposta = `🎲 Tirou *${n}*` + (n === 20 ? ' — acerto crítico! 🔥' : n === 1 ? ' — falha crítica! 💀' : '')
-  }
+  const resposta = jogo.tipo === 'moeda' ? jogarMoeda() : jogarDados(jogo.qtd, jogo.lados)
   await sock.sendMessage(msg.key.remoteJid, { text: resposta }, { quoted: msg }).catch(() => {})
-  log(`🎲 !${jogo} de ${msg.pushName || autor || 'você'}: ${resposta.replace(/\*/g, '')}`)
+  log(`🎲 ${nome} de ${msg.pushName || autor || 'você'}: ${resposta.replace(/\*/g, '')}`)
+}
+
+function jogarMoeda() {
+  return randomInt(2) ? '🪙 Deu *cara*!' : '🪙 Deu *coroa*!'
+}
+
+// ex.: "🎲 *5d6*: 3 + 6 + 1 + 4 + 2 = *16*"; um d20 sozinho ainda avisa acerto/falha crítica
+export function jogarDados(qtd, lados) {
+  if (qtd < 1 || qtd > MAX_DADOS || lados < 2 || lados > MAX_LADOS) {
+    return `🎲 Dá para jogar de 1 a ${MAX_DADOS} dados de 2 a ${MAX_LADOS} lados. Ex.: *!d20*, *!5d6*, *!3d8*`
+  }
+  const valores = Array.from({ length: qtd }, () => randomInt(1, lados + 1))
+  const soma = valores.reduce((a, b) => a + b, 0)
+  const nome = qtd === 1 ? `d${lados}` : `${qtd}d${lados}`
+  if (qtd === 1) {
+    const critico = lados === 20 ? (soma === 20 ? ' — acerto crítico! 🔥' : soma === 1 ? ' — falha crítica! 💀' : '') : ''
+    return `🎲 *${nome}*: *${soma}*${critico}`
+  }
+  return `🎲 *${nome}*: ${valores.join(' + ')} = *${soma}*`
 }
 
 // autor = número de quem mandou o !s; null quando foi o próprio número do bot (que sempre pode tudo)

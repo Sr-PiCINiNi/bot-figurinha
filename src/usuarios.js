@@ -14,16 +14,16 @@ export const PERMISSOES = {
   video: 'Figurinha de vídeos e GIFs',
   visuUnica: 'Figurinha de visualização única',
   moeda: 'Comando !moeda',
-  d20: 'Comando !d20',
+  dados: 'Comando de dados (!d20, !5d6...)',
 }
 
 const CARGOS_INICIAIS = [
   { id: 'bloqueado', nome: 'Bloqueado', cor: '#e5484d',
-    permissoes: { foto: false, video: false, visuUnica: false, moeda: false, d20: false } },
+    permissoes: { foto: false, video: false, visuUnica: false, moeda: false, dados: false } },
   { id: 'comum', nome: 'Comum', cor: '#8696a0',
-    permissoes: { foto: true, video: true, visuUnica: false, moeda: true, d20: true } },
+    permissoes: { foto: true, video: true, visuUnica: false, moeda: true, dados: true } },
   { id: 'vip', nome: 'VIP', cor: '#f5a524',
-    permissoes: { foto: true, video: true, visuUnica: true, moeda: true, d20: true } },
+    permissoes: { foto: true, video: true, visuUnica: true, moeda: true, dados: true } },
 ]
 
 export const usuariosEvents = new EventEmitter()
@@ -38,6 +38,12 @@ try {
 // cargos salvos antes de uma permissão existir: ela vem liberada para quem já podia alguma coisa
 // e negada para quem não podia nada (ex.: Bloqueado), para ninguém perder nem ganhar acesso de surpresa
 for (const cargo of dados.cargos) {
+  // o !d20 virou o comando de dados (!NdM): herda a permissão que o cargo tinha
+  if (cargo.permissoes && 'd20' in cargo.permissoes) {
+    cargo.permissoes.dados ??= cargo.permissoes.d20
+    delete cargo.permissoes.d20
+    salvar()
+  }
   const podiaAlgo = Object.values(cargo.permissoes ?? {}).some(Boolean)
   for (const chave of Object.keys(PERMISSOES)) {
     if (!(chave in (cargo.permissoes ??= {}))) cargo.permissoes[chave] = podiaAlgo

@@ -471,7 +471,7 @@ function renderizarCargos() {
   padrao.value = cargos.cargoPadrao
 
   const novo = $('#novo-cargo [data-permissoes]')
-  if (!novo.children.length) montarPermissoes(novo, { foto: true, video: true, visuUnica: false, moeda: true, d20: true })
+  if (!novo.children.length) montarPermissoes(novo, { foto: true, video: true, visuUnica: false, moeda: true, dados: true })
 }
 
 // ---------- eventos da tela ----------
