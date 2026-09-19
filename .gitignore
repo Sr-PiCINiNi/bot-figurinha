@@ -22,3 +22,7 @@ instalador/dist/
 
 # gerado por launcher\compilar.bat (vai dentro do instalador)
 BotFigurinha.exe
+
+# lista de usuários e cargos (tem números de telefone)
+usuarios.json
+usuarios.json.tmp

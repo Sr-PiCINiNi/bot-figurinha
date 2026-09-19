@@ -237,13 +237,20 @@ function conectarEventos() {
     renderizar()
   })
   fonte.addEventListener('log', ev => adicionarLinha(JSON.parse(ev.data)))
+  fonte.addEventListener('usuario', ev => {
+    const u = JSON.parse(ev.data)
+    usuarios.set(u.numero, u)
+    renderizarUsuarios()
+  })
+  // mudou um cargo: o cargo efetivo e as contagens dos usuários podem ter mudado junto
+  fonte.addEventListener('cargos', () => carregarPessoas())
   fonte.onerror = () => mostrarEstado({ status: 'offline' })
   // ao reconectar, recarrega a lista (pode ter chegado coisa enquanto o painel estava sem conexão)
   fonte.onopen = () => carregar()
 }
 
 async function carregar() {
-  const [lista, linhas] = await Promise.all([api('/api/midias'), api('/api/log')])
+  const [lista, linhas] = await Promise.all([api('/api/midias'), api('/api/log'), carregarPessoas()])
   midias.clear()
   for (const m of lista) midias.set(m.id, m)
   $('#linhas').replaceChildren()
@@ -252,15 +259,206 @@ async function carregar() {
   renderizar()
 }
 
+// ---------- usuários e cargos ----------
+const usuarios = new Map()
+let cargos = { cargoPadrao: null, cargos: [], permissoes: {} }
+let buscaUsuarios = ''
+let cargoFiltrado = ''
+
+function mostrarVista(vista) {
+  $('#vista-midias').hidden = vista !== 'midias'
+  $('#vista-usuarios').hidden = vista !== 'usuarios'
+  $('#vista-cargos').hidden = vista !== 'cargos'
+}
+
+async function carregarPessoas() {
+  const [lista, c] = await Promise.all([api('/api/usuarios'), api('/api/cargos')])
+  cargos = c
+  usuarios.clear()
+  for (const u of lista) usuarios.set(u.numero, u)
+  renderizarCargos()
+  renderizarUsuarios()
+}
+
+const cargoPorId = id => cargos.cargos.find(c => c.id === id)
+
+function formatarNumero(u) {
+  if (u.semTelefone) return 'sem telefone (id interno do WhatsApp)'
+  const n = u.numero
+  const m = /^55(\d{2})(\d{4,5})(\d{4})$/.exec(n)
+  return m ? `+55 (${m[1]}) ${m[2]}-${m[3]}` : `+${n}`
+}
+
+function renderizarUsuarios() {
+  $('#conta-usuarios').textContent = usuarios.size
+  const filtro = $('#filtro-cargo')
+  const atual = filtro.value
+  filtro.replaceChildren(new Option('Todos os cargos', ''), ...cargos.cargos.map(c => new Option(c.nome, c.id)))
+  filtro.value = cargoPorId(atual) ? atual : ''
+
+  const visiveis = [...usuarios.values()]
+    .filter(u => !cargoFiltrado || u.cargoEfetivo === cargoFiltrado)
+    .filter(u => !buscaUsuarios || `${u.nome ?? ''} ${u.numero}`.toLowerCase().includes(buscaUsuarios))
+    .sort((a, b) => (b.ultimoContato ?? 0) - (a.ultimoContato ?? 0))
+
+  const linhas = visiveis.map(u => {
+    const tr = document.createElement('tr')
+    const pessoa = document.createElement('td')
+    const nome = u.nome || formatarNumero(u)
+    pessoa.innerHTML = '<div class="pessoa"><span class="avatar"></span><div><strong></strong><span class="sutil"></span></div></div>'
+    pessoa.querySelector('.avatar').textContent = [...nome.replace(/^\+/, '')][0]?.toUpperCase() ?? '?'
+    pessoa.querySelector('strong').textContent = nome
+    pessoa.querySelector('.sutil').textContent = u.nome ? formatarNumero(u) : ''
+
+    const tdCargo = document.createElement('td')
+    const caixa = document.createElement('span')
+    caixa.className = 'seletor-cargo'
+    const select = document.createElement('select')
+    select.setAttribute('aria-label', `Cargo de ${nome}`)
+    const padrao = cargoPorId(cargos.cargoPadrao)
+    select.append(new Option(`Padrão (${padrao?.nome ?? '—'})`, ''), ...cargos.cargos.map(c => new Option(c.nome, c.id)))
+    select.value = u.cargo && cargoPorId(u.cargo) ? u.cargo : ''
+    caixa.style.setProperty('--cor-cargo', cargoPorId(u.cargoEfetivo)?.cor ?? '')
+    select.addEventListener('change', () => mudarCargo(u.numero, select.value || null))
+    caixa.append(select)
+    tdCargo.append(caixa)
+
+    const tdComandos = document.createElement('td')
+    tdComandos.className = 'num'
+    tdComandos.textContent = u.comandos ?? 0
+    const tdContato = document.createElement('td')
+    tdContato.className = 'sutil'
+    tdContato.textContent = u.ultimoContato ? tempoRelativo(u.ultimoContato) : '—'
+    tr.append(pessoa, tdCargo, tdComandos, tdContato)
+    return tr
+  })
+  $('#lista-usuarios').replaceChildren(...linhas)
+  $('#usuarios-vazio').hidden = visiveis.length > 0
+}
+
+async function mudarCargo(numero, cargo) {
+  try {
+    const u = await api(`/api/usuarios/${numero}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cargo }),
+    })
+    usuarios.set(u.numero, u)
+    renderizarUsuarios()
+    toast(`${u.nome || formatarNumero(u)} agora é ${cargoPorId(u.cargoEfetivo)?.nome}`, 'ok')
+  } catch (err) {
+    toast(`Não consegui mudar o cargo: ${err.message}`, 'erro')
+    renderizarUsuarios()
+  }
+}
+
+// interruptores de permissão (usados nos cards de cargo e no formulário de cargo novo)
+function montarPermissoes(caixa, valores, aoMudar) {
+  caixa.replaceChildren(...Object.entries(cargos.permissoes).map(([chave, rotulo]) => {
+    const label = document.createElement('label')
+    label.className = 'permissao'
+    label.innerHTML = '<span></span><input type="checkbox" role="switch"><span class="trilho" aria-hidden="true"></span>'
+    label.querySelector('span').textContent = rotulo
+    const input = label.querySelector('input')
+    input.name = chave
+    input.checked = !!valores?.[chave]
+    if (aoMudar) input.addEventListener('change', () => aoMudar(chave, input.checked))
+    return label
+  }))
+}
+
+async function editarCargo(id, campos) {
+  try {
+    await api(`/api/cargos/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(campos),
+    })
+  } catch (err) {
+    toast(`Não consegui salvar o cargo: ${err.message}`, 'erro')
+    carregarPessoas()
+  }
+}
+
+function renderizarCargos() {
+  $('#conta-cargos').textContent = cargos.cargos.length
+  const cards = cargos.cargos.map(c => {
+    const el = $('#cargo').content.firstElementChild.cloneNode(true)
+    el.style.setProperty('--cor-cargo', c.cor)
+    const cor = el.querySelector('.cargo-cor')
+    cor.value = c.cor
+    cor.addEventListener('change', () => editarCargo(c.id, { cor: cor.value }))
+    const nome = el.querySelector('.cargo-nome')
+    nome.value = c.nome
+    nome.addEventListener('change', () => editarCargo(c.id, { nome: nome.value }))
+    nome.addEventListener('keydown', e => { if (e.key === 'Enter') nome.blur() })
+    montarPermissoes(el.querySelector('[data-permissoes]'), c.permissoes,
+      (chave, valor) => editarCargo(c.id, { permissoes: { [chave]: valor } }))
+    const rodape = el.querySelector('.cargo-rodape')
+    rodape.textContent = `${c.usuarios} usuário${c.usuarios === 1 ? '' : 's'}`
+    if (c.id === cargos.cargoPadrao) {
+      const selo = document.createElement('span')
+      selo.className = 'selo-padrao'
+      selo.textContent = 'padrão para quem chega'
+      rodape.append(selo)
+    }
+    el.querySelector('.cargo-apagar').addEventListener('click', async () => {
+      if (!confirm(`Apagar o cargo "${c.nome}"? Quem tem esse cargo passa a usar o cargo padrão.`)) return
+      try {
+        await api(`/api/cargos/${c.id}`, { method: 'DELETE' })
+      } catch (err) {
+        toast(`Não consegui apagar: ${err.message}`, 'erro')
+      }
+    })
+    return el
+  })
+  $('#lista-cargos').replaceChildren(...cards)
+
+  const padrao = $('#cargo-padrao')
+  padrao.replaceChildren(...cargos.cargos.map(c => new Option(c.nome, c.id)))
+  padrao.value = cargos.cargoPadrao
+
+  const novo = $('#novo-cargo [data-permissoes]')
+  if (!novo.children.length) montarPermissoes(novo, { foto: true, video: true, visuUnica: false })
+}
+
 // ---------- eventos da tela ----------
 document.querySelectorAll('.pasta').forEach(botao => {
   botao.addEventListener('click', () => {
-    filtro = botao.dataset.filtro
     document.querySelectorAll('.pasta').forEach(b => b.setAttribute('aria-current', String(b === botao)))
+    if (botao.dataset.vista) {
+      mostrarVista(botao.dataset.vista)
+      return
+    }
+    filtro = botao.dataset.filtro
+    mostrarVista('midias')
     renderizar()
   })
 })
 $('#busca').addEventListener('input', e => { busca = e.target.value.trim().toLowerCase(); renderizar() })
+$('#busca-usuarios').addEventListener('input', e => { buscaUsuarios = e.target.value.trim().toLowerCase(); renderizarUsuarios() })
+$('#filtro-cargo').addEventListener('change', e => { cargoFiltrado = e.target.value; renderizarUsuarios() })
+$('#cargo-padrao').addEventListener('change', async e => {
+  try {
+    await api('/api/cargos/padrao', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.target.value }),
+    })
+    toast(`Quem chegar agora entra como ${cargoPorId(e.target.value)?.nome}`, 'ok')
+  } catch (err) {
+    toast(`Não consegui mudar: ${err.message}`, 'erro')
+  }
+})
+$('#novo-cargo').addEventListener('submit', async e => {
+  e.preventDefault()
+  const form = e.target
+  const permissoes = Object.fromEntries([...form.querySelectorAll('[data-permissoes] input')].map(i => [i.name, i.checked]))
+  try {
+    const c = await api('/api/cargos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: form.nome.value, cor: form.cor.value, permissoes }),
+    })
+    form.nome.value = ''
+    toast(`Cargo "${c.nome}" criado`, 'ok')
+  } catch (err) {
+    toast(`Não consegui criar: ${err.message}`, 'erro')
+  }
+})
 $('#filtro-chat').addEventListener('change', e => { chatEscolhido = e.target.value; renderizar() })
 $('#abrir-pasta').addEventListener('click', () => api('/api/abrir-pasta', { method: 'POST' }))
 $('#mostrar-atividade').addEventListener('click', () => {

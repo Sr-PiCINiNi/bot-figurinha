@@ -10,6 +10,7 @@ import { log, logErro, logEvents, linhasRecentes } from './log.js'
 import * as store from './store.js'
 import { wa, estado, fazerFigurinhaDoPainel, reconectar } from './whatsapp.js'
 import { config, configEvents, alterarConfig } from './config.js'
+import * as usuarios from './usuarios.js'
 
 export const PORTA = Number(process.env.PAINEL_PORTA) || 3777
 // PAINEL_HOST=0.0.0.0 abre para a rede (ex.: servidor); aí use PAINEL_SENHA
@@ -81,6 +82,8 @@ function transmitir(evento, dados) {
 }
 wa.on('estado', async () => transmitir('estado', await estadoPublico()))
 configEvents.on('mudou', async () => transmitir('estado', await estadoPublico()))
+usuarios.usuariosEvents.on('usuario', u => transmitir('usuario', u))
+usuarios.usuariosEvents.on('cargos', c => transmitir('cargos', c))
 store.storeEvents.on('midia', item => transmitir('midia', item))
 store.storeEvents.on('removida', id => transmitir('removida', { id }))
 logEvents.on('linha', linha => transmitir('log', linha))
@@ -119,6 +122,38 @@ async function rotear(req, res) {
     req.on('close', () => ouvintes.delete(res))
     return
   }
+  // ---- usuários e cargos ----
+  if (rota === '/api/usuarios' && metodo === 'GET') return json(res, 200, usuarios.listarUsuarios())
+  if (rota === '/api/cargos' && metodo === 'GET') {
+    return json(res, 200, { ...usuarios.estadoCargos(), permissoes: usuarios.PERMISSOES })
+  }
+  try {
+    const mu = /^\/api\/usuarios\/(\d{5,20})$/.exec(rota)
+    if (mu && metodo === 'PATCH') {
+      const { cargo } = await lerCorpo(req)
+      const u = usuarios.definirCargo(mu[1], cargo ?? null)
+      log(`🏷️ ${u.nome || `+${u.numero}`} agora é ${usuarios.cargoDe(u.numero).nome}`)
+      return json(res, 200, u)
+    }
+    if (rota === '/api/cargos' && metodo === 'POST') {
+      const cargo = usuarios.criarCargo(await lerCorpo(req))
+      log(`🏷️ Cargo criado: ${cargo.nome}`)
+      return json(res, 200, cargo)
+    }
+    if (rota === '/api/cargos/padrao' && metodo === 'PUT') {
+      usuarios.definirCargoPadrao((await lerCorpo(req)).id)
+      return json(res, 200, usuarios.estadoCargos())
+    }
+    const mc = /^\/api\/cargos\/([\w-]{1,40})$/.exec(rota)
+    if (mc && metodo === 'PATCH') return json(res, 200, usuarios.editarCargo(mc[1], await lerCorpo(req)))
+    if (mc && metodo === 'DELETE') {
+      usuarios.removerCargo(mc[1])
+      return json(res, 200, { ok: true })
+    }
+  } catch (err) {
+    return json(res, 400, { erro: err.message })
+  }
+
   if (rota === '/api/config' && metodo === 'POST') {
     const novo = alterarConfig(await lerCorpo(req))
     log(`⚙️ Comando !s ${novo.comandoAtivo ? 'ativado' : 'desativado'} pelo painel`)

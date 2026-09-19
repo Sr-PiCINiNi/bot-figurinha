@@ -23,13 +23,12 @@ import { log, logErro } from './log.js'
 import { mediaToSticker, stickerToMedia } from './sticker.js'
 import * as store from './store.js'
 import { config } from './config.js'
+import * as usuarios from './usuarios.js'
 
 const lerArquivo = promisify(readFile)
 
 // ---- configuração ----
 const DEBUG = !!process.env.DEBUG
-// números que podem usar o !s (só dígitos, com DDI). Vazio = qualquer um
-const AUTORIZADOS = []
 // quantas conversões/downloads rodam ao mesmo tempo (o resto espera na fila)
 const MAX_SIMULTANEAS = 2
 // !s enviado com o bot desligado ainda é atendido se tiver até isto de atraso
@@ -260,11 +259,15 @@ async function tratarMensagem(msg, type) {
   if (content?.protocolMessage || content?.reactionMessage) return
 
   // com o !s desligado no painel, o comando vira mensagem comum (a mídia ainda vai para o painel)
-  if (config.comandoAtivo && COMANDO.test(getText(content).trim())) {
-    await tratarComando(msg, content)
+  const comando = config.comandoAtivo && COMANDO.test(getText(content).trim())
+  // todo mundo que manda mensagem entra na lista de usuários do painel (o número do bot não)
+  const autor = msg.key.fromMe ? null : await quemMandou(msg)
+  if (autor && type === 'notify') usuarios.registrar(autor.numero, { nome: msg.pushName, comando, semTelefone: autor.semTelefone })
+
+  if (comando) {
+    await tratarComando(msg, content, autor?.numero ?? null)
     return
   }
-  if (msg.pushName && !msg.key.fromMe) nomesDePessoas.set(await numeroDe(remetenteDe(msg.key)), msg.pushName)
   // mídias novas vão para o painel, inclusive as mandadas pelo celular do bot (fromMe + notify).
   // O que o próprio bot envia (figurinhas, originais do "desfazer") chega como append e fica de fora.
   if (type !== 'notify') return
@@ -272,8 +275,12 @@ async function tratarMensagem(msg, type) {
   await receberMidia(msg, content)
 }
 
-// nomes aprendidos das mensagens (pushName), para dar nome a quem só aparece como número
-const nomesDePessoas = new Map()
+// quem mandou a mensagem; semTelefone = o WhatsApp só deu o id interno (LID) e não achamos o telefone
+async function quemMandou(msg) {
+  const jid = remetenteDe(msg.key)
+  const numero = await numeroDe(jid)
+  return { numero, semTelefone: jid.endsWith('@lid') && numero === digits(jid) }
+}
 
 // telefone (só dígitos) de um jid; o LID (id interno do WhatsApp) é convertido pela tabela do Baileys
 async function numeroDe(jid) {
@@ -289,7 +296,7 @@ async function numeroDe(jid) {
 
 function nomeDe(numero, pushName) {
   if (numero && numero === digits(sock.user?.id)) return sock.user?.name || 'Você (bot)'
-  return pushName || nomesDePessoas.get(numero) || (numero ? `+${numero}` : 'Desconhecido')
+  return pushName || usuarios.nomeDoUsuario(numero) || (numero ? `+${numero}` : 'Desconhecido')
 }
 
 // dados comuns de um item da biblioteca a partir da mensagem
@@ -366,17 +373,18 @@ async function baixarPara(item, msg, content, found) {
   }
 }
 
-async function tratarComando(msg, content) {
+// autor = número de quem mandou o !s; null quando foi o próprio número do bot (que sempre pode tudo)
+async function tratarComando(msg, content, autor) {
   const jid = msg.key.remoteJid
   const ts = toSeconds(msg.messageTimestamp)
-  log(`📩 !s ${jid.endsWith('@g.us') ? 'no grupo' : 'no privado'} de ${msg.pushName || digits(remetenteDe(msg.key))}`)
+  const cargo = autor ? usuarios.cargoDe(autor) : null
+  log(`📩 !s ${jid.endsWith('@g.us') ? 'no grupo' : 'no privado'} de ${msg.pushName || autor || 'você'}` +
+      (cargo ? ` (cargo ${cargo.nome})` : ''))
 
-  if (!msg.key.fromMe && AUTORIZADOS.length) {
-    const quem = [msg.key.participant, msg.key.participantAlt, jid, msg.key.remoteJidAlt].filter(Boolean)
-    if (!quem.some(j => AUTORIZADOS.includes(digits(j)))) {
-      log('   ↳ ignorado: remetente não autorizado')
-      return
-    }
+  // cargo sem nenhuma permissão (ex.: Bloqueado): ignora em silêncio, para não virar spam de recusa
+  if (autor && !usuarios.podeAlgo(autor)) {
+    log('   ↳ ignorado: o cargo não tem nenhuma permissão')
+    return
   }
   // tolera !s mandado enquanto o bot reiniciava, mas não reprocessa histórico antigo
   if (ts < startedAt - ATRASO_MAX_COMANDO) {
@@ -385,10 +393,20 @@ async function tratarComando(msg, content) {
   }
 
   const responder = texto => sock.sendMessage(jid, { text: texto }, { quoted: msg }).catch(() => {})
+  // o cargo libera ou não cada tipo de mídia
+  const negado = async permissao => {
+    if (!autor || usuarios.pode(autor, permissao)) return false
+    log(`   ↳ negado: o cargo ${cargo.nome} não libera ${usuarios.PERMISSOES[permissao].toLowerCase()}`)
+    await responder(`🚫 Seu cargo (*${cargo.nome}*) não permite figurinha de ` +
+      `${usuarios.PERMISSOES[permissao].toLowerCase()}.`)
+    return true
+  }
+  const permissaoDe = (visu, animada) => visu ? 'visuUnica' : animada ? 'video' : 'foto'
 
   // mídia com !s na legenda
   const propria = getMedia(content)
   if (propria) {
+    if (await negado(permissaoDe(ehVisualizacaoUnica(msg.message, propria.media), propria.animada))) return
     const base = await dadosBase(msg, jid)
     const id = store.idPara(jid, msg.key.id)
     const item = store.obter(id)?.disponivel ? store.obter(id) : store.adicionar({
@@ -438,6 +456,7 @@ async function tratarComando(msg, content) {
     await responder('Não veio a mídia junto com a resposta 😕 Tente de novo pelo celular.')
     return
   }
+  if (await negado(permissaoDe(citada.item.categoria === 'visualizacao-unica', q.animada))) return
   await comReacao(msg, async () => {
     const pronto = await baixarCitada(citada)
     await enviarFigurinha(pronto, msg)

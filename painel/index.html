@@ -58,6 +58,16 @@
           Vídeos <span class="contador" data-conta="normais:video">0</span>
         </button>
       </div>
+
+      <div class="grupo-pastas">
+        <span class="grupo-titulo">👥 Pessoas</span>
+        <button class="pasta sub" data-vista="usuarios">
+          Usuários <span class="contador" id="conta-usuarios">0</span>
+        </button>
+        <button class="pasta sub" data-vista="cargos">
+          Cargos <span class="contador" id="conta-cargos">0</span>
+        </button>
+      </div>
     </nav>
 
     <div class="rodape-lateral">
@@ -67,6 +77,28 @@
   </aside>
 
   <main>
+    <section id="conectar" class="conectar" hidden>
+      <div class="qr-caixa">
+        <div id="qr"></div>
+      </div>
+      <div>
+        <h2>Conecte o número do bot</h2>
+        <ol>
+          <li>Abra o WhatsApp no celular do bot</li>
+          <li>Configurações → <b>Dispositivos conectados</b></li>
+          <li>Toque em <b>Conectar dispositivo</b> e aponte para o código</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="conflito" class="aviso erro" hidden>
+      <strong>Outra cópia do bot está conectada com este número.</strong>
+      Feche a outra cópia (em outro computador/servidor ou outra janela) e clique em reconectar.
+      <button id="reconectar" class="botao">Reconectar</button>
+    </section>
+
+    <!-- ===== mídias ===== -->
+    <div id="vista-midias">
     <header class="topo">
       <div>
         <h1 id="titulo">Tudo</h1>
@@ -88,33 +120,81 @@
       Quem <b>mandou</b> a visualização única não consegue responder a ela; tem que ser outra pessoa do grupo.
     </section>
 
-    <section id="conectar" class="conectar" hidden>
-      <div class="qr-caixa">
-        <div id="qr"></div>
-      </div>
-      <div>
-        <h2>Conecte o número do bot</h2>
-        <ol>
-          <li>Abra o WhatsApp no celular do bot</li>
-          <li>Configurações → <b>Dispositivos conectados</b></li>
-          <li>Toque em <b>Conectar dispositivo</b> e aponte para o código</li>
-        </ol>
-      </div>
-    </section>
-
-    <section id="conflito" class="aviso erro" hidden>
-      <strong>Outra cópia do bot está conectada com este número.</strong>
-      Feche a outra cópia (em outro computador/servidor ou outra janela) e clique em reconectar.
-      <button id="reconectar" class="botao">Reconectar</button>
-    </section>
-
     <div id="grade" class="grade" aria-live="polite"></div>
     <div id="vazio" class="vazio" hidden>
       <div class="vazio-icone">🫙</div>
       <p>Nada aqui ainda.</p>
       <p class="sutil">As fotos e vídeos que chegarem no WhatsApp do bot aparecem aqui na hora.</p>
     </div>
+    </div>
+
+    <!-- ===== usuários ===== -->
+    <div id="vista-usuarios" hidden>
+      <header class="topo">
+        <div>
+          <h1>Usuários</h1>
+          <p class="sutil">Todo mundo que manda mensagem ao bot entra aqui. O cargo define o que cada um pode fazer com o !s.</p>
+        </div>
+        <div class="filtros">
+          <input id="busca-usuarios" type="search" placeholder="Buscar nome ou número..." aria-label="Buscar usuário">
+          <select id="filtro-cargo" aria-label="Cargo">
+            <option value="">Todos os cargos</option>
+          </select>
+        </div>
+      </header>
+      <div class="tabela-caixa">
+        <table class="tabela">
+          <thead>
+            <tr><th>Usuário</th><th>Cargo</th><th class="num">Comandos</th><th>Último contato</th></tr>
+          </thead>
+          <tbody id="lista-usuarios"></tbody>
+        </table>
+      </div>
+      <div id="usuarios-vazio" class="vazio" hidden>
+        <div class="vazio-icone">👥</div>
+        <p>Ninguém por aqui ainda.</p>
+        <p class="sutil">Quem mandar mensagem para o bot (no privado ou em grupo) aparece aqui.</p>
+      </div>
+    </div>
+
+    <!-- ===== cargos ===== -->
+    <div id="vista-cargos" hidden>
+      <header class="topo">
+        <div>
+          <h1>Cargos</h1>
+          <p class="sutil">Escolha o que cada cargo pode transformar em figurinha com o !s. Um cargo sem nada marcado
+            é ignorado em silêncio. O número do bot e o painel sempre podem tudo.</p>
+        </div>
+        <label class="campo-padrao">
+          <span class="sutil">Cargo de quem chega</span>
+          <select id="cargo-padrao"></select>
+        </label>
+      </header>
+      <div id="lista-cargos" class="cargos"></div>
+
+      <form id="novo-cargo" class="cargo-card novo">
+        <h2>Novo cargo</h2>
+        <div class="cargo-topo">
+          <input name="cor" type="color" value="#00a884" aria-label="Cor do cargo">
+          <input name="nome" type="text" placeholder="Nome do cargo (ex.: Moderador)" maxlength="30" required>
+        </div>
+        <div class="permissoes" data-permissoes></div>
+        <button class="botao" type="submit">Criar cargo</button>
+      </form>
+    </div>
   </main>
+
+  <template id="cargo">
+    <article class="cargo-card">
+      <div class="cargo-topo">
+        <input class="cargo-cor" type="color" aria-label="Cor do cargo">
+        <input class="cargo-nome" type="text" maxlength="30" aria-label="Nome do cargo">
+        <button class="botao-icone cargo-apagar" title="Apagar cargo" aria-label="Apagar cargo">🗑️</button>
+      </div>
+      <div class="permissoes" data-permissoes></div>
+      <p class="cargo-rodape sutil"></p>
+    </article>
+  </template>
 
   <aside id="atividade" class="atividade" hidden>
     <header>

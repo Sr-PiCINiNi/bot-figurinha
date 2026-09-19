@@ -78,6 +78,17 @@ Para abrir o painel depois, use o atalho **Bot Figurinha** da Área de Trabalho 
 - **Busca e filtro** por conversa ficam no topo. **📜 Atividade** mostra o que o bot está fazendo.
 - O interruptor **Comando !s** liga ou desliga o comando no WhatsApp.
 
+### Usuários e cargos
+
+- **👥 Usuários:** todo mundo que manda mensagem ao bot, no privado ou em grupo, entra na lista, com nome, número,
+  quantos comandos usou e quando falou por último. Escolha o **cargo** de cada um ali mesmo.
+- **🏷️ Cargos:** cada cargo define se o `!s` funciona em **Fotos**, **Vídeos e GIFs** e **Visualização única**.
+  Vêm prontos o *Bloqueado* (nada), o *Comum* (fotos e vídeos) e o *VIP* (tudo). Dá para editar, criar e apagar.
+- **Cargo de quem chega:** escolha qual cargo os novos usuários recebem.
+- Se a pessoa pedir algo que o cargo não libera, o bot responde explicando. Um cargo sem nenhuma permissão
+  (como o Bloqueado) é ignorado em silêncio.
+- O número do bot e os cliques no painel sempre podem tudo.
+
 ### Pelo WhatsApp
 
 | O que fazer | Resultado |
@@ -184,11 +195,10 @@ o checksum. O resultado fica em `instalador\dist\`.
 | Onde | Constante | Padrão | O que faz |
 |---|---|---|---|
 | `bot.js` | `MIDIA_DIAS` / `MIDIA_MAX_MB` | `30` / `5000` | Por quanto tempo e até quanto espaço as mídias ficam guardadas |
-| `src/whatsapp.js` | `AUTORIZADOS` | `[]` | Números que podem usar o `!s` (vazio = todos) |
 | `src/whatsapp.js` | `MAX_AUTO_MB` | `64` | Mídias maiores não são baixadas automaticamente |
 | ambiente | `PAINEL_PORTA` / `PAINEL_HOST` / `PAINEL_SENHA` | `3777` / `127.0.0.1` / — | Painel |
 
-Nunca publique as pastas `auth/` (a sessão do WhatsApp: quem tiver essa pasta controla o número), `midia/` e o
+Nunca publique `auth/` (a sessão do WhatsApp: quem tiver essa pasta controla o número), `midia/`, `usuarios.json` e o
 `bot.log`. Elas já estão no `.gitignore`.
 
 ### Componentes de terceiros
