@@ -123,7 +123,7 @@ function preencherCard(el, m) {
   f.classList.toggle('tem', feitas > 0)
   el.querySelector('.mostrar').hidden = !m.disponivel
   el.querySelector('.card-principal').title = bloqueado
-    ? 'O WhatsApp não entrega visualização única ao bot. Responda a ela com !s pelo celular.'
+    ? 'O WhatsApp não entrega visualização única ao bot. Responda a ela pelo celular (qualquer texto) para liberar.'
     : m.disponivel ? 'Clique para fazer a figurinha e enviar na conversa' : ''
 }
 
@@ -160,7 +160,7 @@ async function fazerFigurinha(id) {
   const m = midias.get(id)
   if (!m) return
   if (m.motivo === 'visualizacao-unica') {
-    toast('Essa visualização única está bloqueada pelo WhatsApp. Responda a ela com !s pelo celular.', 'erro')
+    toast('Bloqueada pelo WhatsApp: responda a ela pelo celular (qualquer texto) e ela é liberada aqui.', 'erro')
     return
   }
   if (!m.disponivel) {

@@ -254,7 +254,9 @@ async function tratarMensagem(msg, type) {
   if (msg.pushName && !msg.key.fromMe) nomesDePessoas.set(await numeroDe(remetenteDe(msg.key)), msg.pushName)
   // mídias novas vão para o painel, inclusive as mandadas pelo celular do bot (fromMe + notify).
   // O que o próprio bot envia (figurinhas, originais do "desfazer") chega como append e fica de fora.
-  if (type === 'notify') await receberMidia(msg, content)
+  if (type !== 'notify') return
+  await liberarPorResposta(msg, content)
+  await receberMidia(msg, content)
 }
 
 // nomes aprendidos das mensagens (pushName), para dar nome a quem só aparece como número
@@ -299,7 +301,7 @@ async function receberMidia(msg, content) {
   if (store.obter(id)?.disponivel) return
   const recebidoEm = toSeconds(msg.messageTimestamp) * 1000 || Date.now()
 
-  // visualização única chega vazia: vira card bloqueado até alguém responder com !s pelo celular
+  // visualização única chega vazia: vira card bloqueado até alguém responder a ela pelo celular
   if (!content && msg.key.isViewOnce) {
     if (store.obter(id)) return
     const base = await dadosBase(msg, chat)
@@ -418,20 +420,34 @@ async function tratarComando(msg, content) {
     return
   }
 
-  // a resposta aponta para a mensagem original (stanzaId): é o mesmo item do painel,
-  // inclusive o card bloqueado de visualização única, que agora ganha o arquivo
+  const citada = await itemDaCitacao(msg, ctx, quoted, q)
+  if (!citada) {
+    await responder('Não veio a mídia junto com a resposta 😕 Tente de novo pelo celular.')
+    return
+  }
+  await comReacao(msg, async () => {
+    const pronto = await baixarCitada(citada)
+    await enviarFigurinha(pronto, msg)
+  }, responder)
+}
+
+// Uma resposta aponta para a mensagem original (stanzaId) e leva uma cópia dela, com a chave da mídia.
+// O item do painel é o da mensagem original — inclusive o card bloqueado de visualização única,
+// que assim ganha o arquivo. Devolve null se a cópia veio sem a chave (e o item ainda não tem arquivo).
+async function itemDaCitacao(msg, ctx, quoted, q) {
+  const jid = msg.key.remoteJid
   const idOriginal = ctx.stanzaId ? store.idPara(jid, ctx.stanzaId) : store.idPara(jid, msg.key.id)
   let item = store.obter(idOriginal)
   if (!item?.disponivel && !temChave(q.media)) {
     log('   ↳ a cópia citada veio sem a chave da mídia')
-    await responder('Não veio a mídia junto com a resposta 😕 Tente de novo pelo celular.')
-    return
+    return null
   }
 
+  const autor = await numeroDe(ctx.participant)
   const keyOriginal = {
     remoteJid: jid,
     id: ctx.stanzaId,
-    fromMe: false,
+    fromMe: !!autor && autor === digits(sock.user?.id),
     participant: ctx.participant || undefined,
   }
   const msgOriginal = { key: keyOriginal, message: ctx.quotedMessage, messageTimestamp: msg.messageTimestamp }
@@ -440,8 +456,9 @@ async function tratarComando(msg, content) {
     item = store.adicionar({
       id: idOriginal,
       categoria: 'normais', animada: q.animada, tipo: q.gif ? 'gif' : q.animada ? 'video' : 'foto',
-      recebidoEm: ts * 1000 || Date.now(), ...base, legenda: q.media.caption ?? '',
-      disponivel: false, motivo: 'baixando', figurinhas: [], msg: serializar(msgOriginal),
+      recebidoEm: toSeconds(msg.messageTimestamp) * 1000 || Date.now(), ...base,
+      legenda: q.media.caption ?? '', disponivel: false, motivo: 'baixando', figurinhas: [],
+      msg: serializar(msgOriginal),
     })
   }
   const visu = ehVisualizacaoUnica(ctx.quotedMessage, q.media) || item.categoria === 'visualizacao-unica'
@@ -453,10 +470,27 @@ async function tratarComando(msg, content) {
     })
   }
   log(`   ↳ usando a mídia citada${visu ? ' (visualização única)' : ''}`)
-  await comReacao(msg, async () => {
-    const pronto = item.disponivel ? item : await baixarPara(item, msgOriginal, quoted, q)
-    await enviarFigurinha(pronto, msg)
-  }, responder)
+  return { item, msgOriginal, quoted, q }
+}
+
+function baixarCitada({ item, msgOriginal, quoted, q }) {
+  return item.disponivel ? item : baixarPara(item, msgOriginal, quoted, q)
+}
+
+// resposta comum (sem !s) a um card bloqueado: só libera o card; a figurinha sai pelo clique no painel
+async function liberarPorResposta(msg, content) {
+  const ctx = getContextInfo(content)
+  if (!ctx?.stanzaId || !ctx.quotedMessage) return
+  const existente = store.obter(store.idPara(msg.key.remoteJid, ctx.stanzaId))
+  if (!existente || existente.disponivel) return
+  const quoted = normalizeMessageContent(ctx.quotedMessage)
+  const q = getMedia(quoted)
+  if (!q) return
+  log(`🔓 Resposta à mídia bloqueada de ${existente.remetenteNome} em ${existente.chatNome}`)
+  const citada = await itemDaCitacao(msg, ctx, quoted, q)
+  if (!citada) return
+  await baixarCitada(citada)
+  log('   ↳ liberada no painel — clique nela para fazer a figurinha')
 }
 
 // ⏳ enquanto trabalha; em caso de erro, avisa na conversa
@@ -493,7 +527,7 @@ export async function fazerFigurinhaDoPainel(id) {
   if (!item) throw new Error('mídia não encontrada')
   if (!item.disponivel) {
     throw new Error(item.motivo === 'visualizacao-unica'
-      ? 'o WhatsApp não entrega visualização única ao bot — responda a ela com !s pelo celular'
+      ? 'o WhatsApp não entrega visualização única ao bot — responda a ela pelo celular para liberar'
       : 'essa mídia não foi baixada')
   }
   await enviarFigurinha(item, null)
