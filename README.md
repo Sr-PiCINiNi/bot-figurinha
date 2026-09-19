@@ -1,40 +1,173 @@
-# Bot Figurinha
+# 🟢 Bot Figurinha
 
-Bot de WhatsApp (Baileys) com painel gráfico: as fotos, vídeos e GIFs que chegam ao número do bot aparecem
-no painel, organizados em pastas. **Um clique faz a figurinha** e manda na conversa de onde a mídia veio.
-O comando `!s` continua funcionando direto no WhatsApp.
+Transforma fotos, vídeos e GIFs do WhatsApp em figurinhas. As mídias que chegam ao número do bot aparecem num
+**painel no computador**, separadas em pastas. **Um clique** faz a figurinha e manda na conversa. Também funciona
+direto no WhatsApp com o comando **`!s`**.
 
-## Painel
+**[⬇️ Baixar o instalador para Windows](https://github.com/Sr-PiCINiNi/bot-figurinha/releases/latest)**
 
-- **Pastas:** *Visualização única* (Fotos, Vídeos, Bloqueadas) e *Normais* (Fotos, Vídeos). No disco ficam em
-  `midia/Visualizacao unica/...` e `midia/Normais/...`.
-- **Clique na mídia:** o bot faz a figurinha e envia respondendo à mensagem original.
-- **Busca e filtro por conversa**, **Atividade** (o log ao vivo) e o **QR Code** para conectar, tudo no painel.
-- Endereço: http://127.0.0.1:3777 (só abre neste computador).
+---
 
-### Visualização única
+## 📦 Como instalar (passo a passo)
 
-O servidor do WhatsApp **não entrega o conteúdo** de visualização única a aparelhos conectados, como o bot e o
-WhatsApp do PC. Ela aparece no painel como card **bloqueado**. Para liberar, alguém precisa **responder a ela
-com `!s` pelo celular**: a resposta traz a foto junto, o bot faz a figurinha e o card é preenchido.
+### Do que você precisa
 
-## Comandos no WhatsApp
+- Um **computador com Windows 10 ou 11**, que fique ligado enquanto o bot estiver em uso.
+- Um **número de WhatsApp só para o bot**, num celular com internet. Use um número secundário: bots não
+  oficiais podem ser banidos pelo WhatsApp.
 
-- **Legenda:** foto/vídeo/GIF com `!s` na legenda.
-- **Resposta:** responda a uma foto/vídeo/GIF (inclusive visualização única, pelo celular) com `!s`.
-- **Desfazer:** responda a uma figurinha com `!s` e ela volta a ser foto/vídeo, em qualidade original se foi feita
-  por este bot.
+Não precisa instalar mais nada. Tudo o que o bot usa já vem dentro do instalador.
 
-## Instalar (Windows, sem precisar de nada)
+### 1. Baixe o instalador
 
-1. Baixe o **`BotFigurinha-Setup-<versão>.exe`** e abra.
-2. Se aparecer *"O Windows protegeu o computador"*, clique em **Mais informações → Executar assim mesmo**.
-   O aviso aparece porque o instalador não tem assinatura digital paga; não é vírus.
-3. Avançar → Instalar. Não pede administrador. O Node.js e o ffmpeg já vêm dentro dele.
-4. O painel abre sozinho: escaneie o QR Code com o celular do número do bot.
+Entre em **[Releases](https://github.com/Sr-PiCINiNi/bot-figurinha/releases/latest)** e clique no arquivo
+**`BotFigurinha-Setup-x.x.x.exe`** (por volta de 60 MB).
 
-Para desinstalar: *Configurações → Aplicativos → Bot Figurinha*. Ele pergunta se deve apagar também a conexão
-com o WhatsApp e as mídias. Responda "Não" se for reinstalar.
+### 2. Abra o instalador
+
+Dê dois cliques no arquivo baixado. O Windows pode mostrar um destes avisos:
+
+- **"O Windows protegeu o computador"** (tela azul): clique em **Mais informações** e depois em
+  **Executar assim mesmo**.
+- **O navegador avisando que o arquivo "não é baixado com frequência"**: clique em **⋯ → Manter**.
+
+Os avisos aparecem porque o instalador não tem assinatura digital, um certificado pago. O código está todo
+aqui no GitHub.
+
+### 3. Instale
+
+Clique em **Avançar** e depois em **Instalar**. Não é preciso ser administrador. Você pode marcar:
+
+- ☑️ **Criar atalho na Área de Trabalho**
+- ☑️ **Ligar o bot junto com o Windows**, para ele estar sempre ativo
+
+No final, deixe marcado **"Abrir o Bot Figurinha agora"** e clique em **Concluir**.
+
+### 4. Conecte o número do bot
+
+O painel abre sozinho, mostrando um **QR Code**. No **celular do número do bot**:
+
+1. Abra o WhatsApp.
+2. Toque em **⋮ (ou Configurações) → Dispositivos conectados → Conectar dispositivo**.
+3. Aponte a câmera para o QR Code do painel.
+
+Quando aparecer **🟢 Conectado** no painel, está pronto. Só é preciso fazer isso uma vez.
+
+### 5. Onde o bot fica
+
+O bot roda em segundo plano, com um ícone **perto do relógio** do Windows (se não estiver visível, clique na
+setinha **^**). Clique com o **botão direito** no ícone para:
+
+- **Abrir painel**
+- **Abrir pasta das mídias**
+- **Reiniciar bot**
+- **Sair**, que desliga o bot
+
+Para abrir o painel depois, use o atalho **Bot Figurinha** da Área de Trabalho ou do Menu Iniciar.
+
+---
+
+## 🖼️ Como usar
+
+### Pelo painel (no computador)
+
+- As fotos e vídeos que chegam ao número do bot aparecem na hora, separados em pastas:
+  - **👁️ Visualização única:** Fotos, Vídeos, Bloqueadas
+  - **🖼️ Normais:** Fotos, Vídeos
+- **Clique numa mídia** e a figurinha é feita e enviada na conversa de onde ela veio.
+- **Busca e filtro** por conversa ficam no topo. **📜 Atividade** mostra o que o bot está fazendo.
+- O interruptor **Comando !s** liga ou desliga o comando no WhatsApp.
+
+### Pelo WhatsApp
+
+| O que fazer | Resultado |
+|---|---|
+| Mandar foto/vídeo/GIF com **`!s`** na legenda | vira figurinha |
+| **Responder** a uma foto/vídeo/GIF com **`!s`** | vira figurinha |
+| **Responder** a uma figurinha com **`!s`** | volta a ser foto/vídeo (em qualidade original, se foi feita pelo bot) |
+
+Também funcionam `.s`, `/s`, `!fig` e `!sticker`.
+
+### ⚠️ Visualização única
+
+O WhatsApp **não entrega** o conteúdo de visualização única ao bot, nem ao WhatsApp do computador. É uma trava
+do próprio WhatsApp. Ela aparece no painel como **🔒 bloqueada**. Para liberar:
+
+- Alguém **responde a ela pelo celular**, com qualquer texto. O card é liberado no painel e é só clicar.
+- Ou responde com **`!s`**, e a figurinha já sai na hora.
+
+Quem **enviou** a visualização única não consegue responder a ela. Tem que ser outra pessoa da conversa.
+
+---
+
+## ❓ Dúvidas comuns
+
+<details>
+<summary><b>O painel mostra "Conflito de sessão"</b></summary>
+
+Há outra cópia do bot conectada com o mesmo número, em outro computador ou servidor. Feche a outra e clique em
+**Reconectar** no painel.
+</details>
+
+<details>
+<summary><b>Desconectei o bot pelo celular. E agora?</b></summary>
+
+O painel mostra um QR Code novo. É só escanear de novo (passo 4).
+</details>
+
+<details>
+<summary><b>Onde ficam as fotos e vídeos?</b></summary>
+
+No ícone perto do relógio, clique em **Abrir pasta das mídias**. Elas ficam organizadas em
+`Visualizacao unica\Fotos`, `Normais\Videos` etc. As mídias com mais de 30 dias são apagadas automaticamente,
+e a pasta nunca passa de 5 GB.
+</details>
+
+<details>
+<summary><b>Como atualizar para uma versão nova?</b></summary>
+
+Baixe o instalador novo e instale por cima. A conexão com o WhatsApp e as mídias são mantidas.
+</details>
+
+<details>
+<summary><b>Como desinstalar?</b></summary>
+
+Vá em **Configurações → Aplicativos → Bot Figurinha → Desinstalar**. Ele pergunta se deve apagar também a
+conexão e as mídias. Responda **Não** se for reinstalar depois.
+</details>
+
+---
+
+## 🛠️ Para desenvolvedores
+
+### Rodar pelo código
+
+Precisa de **Node.js 20+** e **ffmpeg**.
+
+```bat
+git clone https://github.com/Sr-PiCINiNi/bot-figurinha.git
+cd bot-figurinha
+npm install
+launcher\compilar.bat
+BotFigurinha.exe
+```
+
+`iniciar-bot.bat` roda em modo terminal, com o log ao vivo.
+
+### Servidor Linux
+
+```bash
+sudo apt install -y ffmpeg git
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
+git clone https://github.com/Sr-PiCINiNi/bot-figurinha.git && cd bot-figurinha
+npm install
+sudo npm install -g pm2
+PAINEL_SENHA=uma-senha-forte pm2 start bot.js --name figurinha
+pm2 save && pm2 startup
+```
+
+O painel fica em `127.0.0.1:3777` do servidor. Para acessar do seu PC, use um túnel:
+`ssh -L 3777:127.0.0.1:3777 usuario@servidor`.
 
 ### Gerar o instalador
 
@@ -43,67 +176,23 @@ winget install JRSoftware.InnoSetup
 instalador\gerar-instalador.bat
 ```
 
-O resultado fica em `instalador\dist\`. Na primeira vez, o script baixa o ffmpeg essentials (gyan.dev) e confere
-o checksum. Para lançar uma versão nova, mude `version` no `package.json` antes de gerar.
+Mude `version` no `package.json` antes. Na primeira vez, o script baixa o ffmpeg essentials (gyan.dev) e confere
+o checksum. O resultado fica em `instalador\dist\`.
 
-## Instalar pelo código (desenvolvedores)
-
-Precisa de **Node.js 20+**, **ffmpeg** e **git**.
-
-### Windows
-
-```bat
-winget install OpenJS.NodeJS.LTS Gyan.FFmpeg Git.Git
-git clone https://github.com/Sr-PiCINiNi/bot-figurinha.git
-cd bot-figurinha
-npm install
-launcher\compilar.bat
-```
-
-Abra o **`BotFigurinha.exe`**. O bot roda escondido, com um ícone na bandeja (perto do relógio), e o painel abre
-numa janela própria. Escaneie o QR Code que aparece no painel com o celular do número do bot (WhatsApp >
-Dispositivos conectados > Conectar dispositivo).
-
-- **Ícone da bandeja** (botão direito): Abrir painel, Abrir pasta das mídias, Reiniciar bot, Sair. Se o bot cair,
-  ele é religado sozinho.
-- **Iniciar com o Windows:** `Win+R` → `shell:startup` → crie um atalho para `BotFigurinha.exe --minimizado`.
-- **Modo terminal**, para ver o log ao vivo: `iniciar-bot.bat`.
-
-### Servidor Linux
-
-```bash
-sudo apt install -y ffmpeg git
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
-git clone https://github.com/Sr-PiCINiNi/bot-figurinha.git
-cd bot-figurinha
-npm install
-sudo npm install -g pm2
-PAINEL_SENHA=uma-senha-forte pm2 start bot.js --name figurinha
-pm2 save && pm2 startup
-```
-
-O painel fica em `127.0.0.1:3777` do servidor. Para acessar do seu PC, use um túnel SSH:
-`ssh -L 3777:127.0.0.1:3777 usuario@servidor` e abra http://127.0.0.1:3777. Se abrir para a rede com
-`PAINEL_HOST=0.0.0.0`, defina `PAINEL_SENHA`.
-
-## Importante
-
-- **Uma cópia por vez:** o bot não roda duas vezes no mesmo computador. Mas duas máquinas com o mesmo número
-  se derrubam (erro 440). Nesse caso o painel mostra "Conflito de sessão": feche a outra cópia e clique em
-  **Reconectar**.
-- **Pastas que nunca vão para o GitHub** (estão no `.gitignore`):
-  - `auth/`: sessão do WhatsApp; quem tiver essa pasta controla o número
-  - `midia/`: mídias recebidas
-  - `bot.log`: tem números de telefone
-
-## Configurações
+### Configurações
 
 | Onde | Constante | Padrão | O que faz |
 |---|---|---|---|
-| `bot.js` | `MIDIA_DIAS` | `30` | Dias que as mídias ficam guardadas |
-| `bot.js` | `MIDIA_MAX_MB` | `5000` | Tamanho máximo da pasta `midia/` (as mais antigas saem primeiro) |
+| `bot.js` | `MIDIA_DIAS` / `MIDIA_MAX_MB` | `30` / `5000` | Por quanto tempo e até quanto espaço as mídias ficam guardadas |
 | `src/whatsapp.js` | `AUTORIZADOS` | `[]` | Números que podem usar o `!s` (vazio = todos) |
 | `src/whatsapp.js` | `MAX_AUTO_MB` | `64` | Mídias maiores não são baixadas automaticamente |
-| variável de ambiente | `PAINEL_PORTA` / `PAINEL_HOST` / `PAINEL_SENHA` | `3777` / `127.0.0.1` / — | Painel |
+| ambiente | `PAINEL_PORTA` / `PAINEL_HOST` / `PAINEL_SENHA` | `3777` / `127.0.0.1` / — | Painel |
 
-Com `DEBUG=1`, o log interno do Baileys também aparece.
+Nunca publique as pastas `auth/` (a sessão do WhatsApp: quem tiver essa pasta controla o número), `midia/` e o
+`bot.log`. Elas já estão no `.gitignore`.
+
+### Componentes de terceiros
+
+O instalador inclui o [Node.js](https://nodejs.org) (licença MIT) e o
+[FFmpeg](https://ffmpeg.org) essentials build de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (licença GPLv3).
+As licenças vão junto, em `runtime\licencas`.

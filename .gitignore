@@ -19,3 +19,6 @@ config.json
 instalador/cache/
 instalador/build/
 instalador/dist/
+
+# gerado por launcher\compilar.bat (vai dentro do instalador)
+BotFigurinha.exe
