@@ -22,6 +22,7 @@ import path from 'node:path'
 import { log, logErro } from './log.js'
 import { mediaToSticker, stickerToMedia } from './sticker.js'
 import * as store from './store.js'
+import { config } from './config.js'
 
 const lerArquivo = promisify(readFile)
 
@@ -247,7 +248,8 @@ async function tratarMensagem(msg, type) {
   const content = normalizeMessageContent(msg.message)
   if (content?.protocolMessage || content?.reactionMessage) return
 
-  if (COMANDO.test(getText(content).trim())) {
+  // com o !s desligado no painel, o comando vira mensagem comum (a mídia ainda vai para o painel)
+  if (config.comandoAtivo && COMANDO.test(getText(content).trim())) {
     await tratarComando(msg, content)
     return
   }

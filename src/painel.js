@@ -9,6 +9,7 @@ import QRCode from 'qrcode'
 import { log, logErro, logEvents, linhasRecentes } from './log.js'
 import * as store from './store.js'
 import { wa, estado, fazerFigurinhaDoPainel, reconectar } from './whatsapp.js'
+import { config, configEvents, alterarConfig } from './config.js'
 
 export const PORTA = Number(process.env.PAINEL_PORTA) || 3777
 // PAINEL_HOST=0.0.0.0 abre para a rede (ex.: servidor); aí use PAINEL_SENHA
@@ -25,7 +26,20 @@ const TIPOS = {
 
 async function estadoPublico() {
   const { qr, ...resto } = estado
-  return { ...resto, qrSvg: qr ? await QRCode.toString(qr, { type: 'svg', margin: 1 }) : null }
+  return { ...resto, config: { ...config }, qrSvg: qr ? await QRCode.toString(qr, { type: 'svg', margin: 1 }) : null }
+}
+
+function lerCorpo(req) {
+  return new Promise((resolve, reject) => {
+    let corpo = ''
+    req.on('data', parte => {
+      corpo += parte
+      if (corpo.length > 10_000) reject(new Error('corpo grande demais'))
+    })
+    req.on('end', () => {
+      try { resolve(JSON.parse(corpo || '{}')) } catch { reject(new Error('JSON inválido')) }
+    })
+  })
 }
 
 function json(res, status, dados) {
@@ -60,6 +74,7 @@ function transmitir(evento, dados) {
   for (const res of ouvintes) res.write(pacote)
 }
 wa.on('estado', async () => transmitir('estado', await estadoPublico()))
+configEvents.on('mudou', async () => transmitir('estado', await estadoPublico()))
 store.storeEvents.on('midia', item => transmitir('midia', item))
 store.storeEvents.on('removida', id => transmitir('removida', { id }))
 logEvents.on('linha', linha => transmitir('log', linha))
@@ -97,6 +112,11 @@ async function rotear(req, res) {
     ouvintes.add(res)
     req.on('close', () => ouvintes.delete(res))
     return
+  }
+  if (rota === '/api/config' && metodo === 'POST') {
+    const novo = alterarConfig(await lerCorpo(req))
+    log(`⚙️ Comando !s ${novo.comandoAtivo ? 'ativado' : 'desativado'} pelo painel`)
+    return json(res, 200, novo)
   }
   if (rota === '/api/reconectar' && metodo === 'POST') {
     reconectar()

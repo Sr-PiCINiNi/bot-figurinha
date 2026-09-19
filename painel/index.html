@@ -22,6 +22,15 @@
       <span id="conexao-texto">Iniciando...</span>
     </div>
 
+    <label class="interruptor" title="Com o !s desligado, o bot não responde a comandos no WhatsApp; o painel continua recebendo as mídias.">
+      <span>
+        <strong>Comando !s</strong>
+        <span id="comando-texto" class="sutil">Ativo no WhatsApp</span>
+      </span>
+      <input id="comando-ativo" type="checkbox" role="switch" checked>
+      <span class="trilho" aria-hidden="true"></span>
+    </label>
+
     <nav id="pastas" aria-label="Pastas">
       <button class="pasta" data-filtro="tudo" aria-current="true">
         <span class="pasta-icone">🗂️</span> Tudo <span class="contador" data-conta="tudo">0</span>

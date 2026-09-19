@@ -11,3 +11,6 @@ bot.lock
 
 node_modules/
 figurinha.webp
+
+# preferências do painel (de cada máquina)
+config.json

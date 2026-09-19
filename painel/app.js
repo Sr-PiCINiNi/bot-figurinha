@@ -200,6 +200,12 @@ function mostrarEstado(e) {
   $('#conectar').hidden = status !== 'qr'
   if (e.qrSvg) $('#qr').innerHTML = e.qrSvg
   $('#conflito').hidden = status !== 'conflito'
+  if (e.config) mostrarComando(e.config.comandoAtivo)
+}
+
+function mostrarComando(ativo) {
+  $('#comando-ativo').checked = ativo
+  $('#comando-texto').textContent = ativo ? 'Ativo no WhatsApp' : 'Desligado — só pelo painel'
 }
 
 function adicionarLinha({ em, nivel, texto }) {
@@ -263,6 +269,24 @@ $('#mostrar-atividade').addEventListener('click', () => {
 })
 $('#fechar-atividade').addEventListener('click', () => { $('#atividade').hidden = true })
 $('#reconectar').addEventListener('click', () => api('/api/reconectar', { method: 'POST' }))
+$('#comando-ativo').addEventListener('change', async e => {
+  const ativo = e.target.checked
+  e.target.disabled = true
+  try {
+    const cfg = await api('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comandoAtivo: ativo }),
+    })
+    mostrarComando(cfg.comandoAtivo)
+    toast(cfg.comandoAtivo ? 'Comando !s ativado no WhatsApp' : 'Comando !s desligado', 'ok')
+  } catch (err) {
+    mostrarComando(!ativo)
+    toast(`Não consegui mudar: ${err.message}`, 'erro')
+  } finally {
+    e.target.disabled = false
+  }
+})
 setInterval(renderizar, 60_000) // atualiza o "há X min"
 
 conectarEventos()
