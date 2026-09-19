@@ -251,20 +251,44 @@ async function tratarMensagem(msg, type) {
     await tratarComando(msg, content)
     return
   }
-  // mídias novas de outras pessoas vão para o painel (append = histórico; fromMe = o próprio bot)
-  if (type === 'notify' && !msg.key.fromMe) await receberMidia(msg, content)
+  if (msg.pushName && !msg.key.fromMe) nomesDePessoas.set(await numeroDe(remetenteDe(msg.key)), msg.pushName)
+  // mídias novas vão para o painel, inclusive as mandadas pelo celular do bot (fromMe + notify).
+  // O que o próprio bot envia (figurinhas, originais do "desfazer") chega como append e fica de fora.
+  if (type === 'notify') await receberMidia(msg, content)
+}
+
+// nomes aprendidos das mensagens (pushName), para dar nome a quem só aparece como número
+const nomesDePessoas = new Map()
+
+// telefone (só dígitos) de um jid; o LID (id interno do WhatsApp) é convertido pela tabela do Baileys
+async function numeroDe(jid) {
+  if (!jid) return ''
+  if (jid.endsWith('@lid')) {
+    const eu = sock.user?.lid && jidNormalizedUser(sock.user.lid)
+    if (eu && jidNormalizedUser(jid) === eu) return digits(sock.user.id)
+    const pn = await sock.signalRepository?.lidMapping?.getPNForLID(jid).catch(() => null)
+    if (pn) return digits(pn)
+  }
+  return digits(jid)
+}
+
+function nomeDe(numero, pushName) {
+  if (numero && numero === digits(sock.user?.id)) return sock.user?.name || 'Você (bot)'
+  return pushName || nomesDePessoas.get(numero) || (numero ? `+${numero}` : 'Desconhecido')
 }
 
 // dados comuns de um item da biblioteca a partir da mensagem
 async function dadosBase(msg, chat) {
   const grupo = chat.endsWith('@g.us')
-  const remetente = remetenteDe(msg.key)
-  const remetenteNome = msg.pushName || digits(remetente)
+  const remetente = msg.key.fromMe ? digits(sock.user?.id) : await numeroDe(remetenteDe(msg.key))
+  const remetenteNome = nomeDe(remetente, msg.key.fromMe ? null : msg.pushName)
+  // no privado a conversa é com a outra pessoa, mesmo quando quem mandou foi o celular do bot
+  const outro = grupo ? '' : await numeroDe(msg.key.remoteJidAlt ?? chat)
   return {
     chat,
     grupo,
-    chatNome: grupo ? await nomeDoGrupo(chat) : remetenteNome,
-    remetente: digits(remetente),
+    chatNome: grupo ? await nomeDoGrupo(chat) : msg.key.fromMe ? nomeDe(outro) : remetenteNome,
+    remetente,
     remetenteNome,
   }
 }
