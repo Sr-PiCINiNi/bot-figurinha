@@ -296,7 +296,8 @@ function conectarEventos() {
   fonte.addEventListener('usuario', ev => {
     const u = JSON.parse(ev.data)
     usuarios.set(u.numero, u)
-    renderizarUsuarios()
+    $('#conta-usuarios').textContent = usuarios.size
+    agendarUsuarios()
   })
   // mudou um cargo: o cargo efetivo e as contagens dos usuários podem ter mudado junto
   fonte.addEventListener('cargos', () => carregarPessoas())
@@ -320,11 +321,54 @@ const usuarios = new Map()
 let cargos = { cargoPadrao: null, cargos: [], permissoes: {} }
 let buscaUsuarios = ''
 let cargoFiltrado = ''
+let conversaUsuarios = '' // '' = todas, '__privado' = conversas diretas, ou o id de um grupo
+let ordemUsuarios = 'ultimoContato'
+let grupos = [] // [{ id, nome, membros }] dos grupos em que o bot está
 
 function mostrarVista(vista) {
-  $('#vista-midias').hidden = vista !== 'midias'
-  $('#vista-usuarios').hidden = vista !== 'usuarios'
-  $('#vista-cargos').hidden = vista !== 'cargos'
+  for (const nome of ['midias', 'usuarios', 'cargos', 'mensagem']) $(`#vista-${nome}`).hidden = vista !== nome
+  if (vista === 'usuarios') renderizarUsuarios()
+  if (vista === 'mensagem' || vista === 'usuarios') carregarGrupos()
+}
+
+async function carregarGrupos() {
+  try {
+    grupos = await api('/api/grupos')
+  } catch {
+    return // bot desconectado: fica com a lista que já tinha
+  }
+  const opcoes = (select, primeira) => {
+    const atual = select.value
+    select.replaceChildren(...primeira, ...grupos.map(g => new Option(`👥 ${g.nome}`, g.id)))
+    select.value = [...select.options].some(o => o.value === atual) ? atual : select.options[0].value
+  }
+  opcoes($('#conversa-usuarios'), [new Option('Todas as conversas', ''), new Option('💬 Só conversas no privado', '__privado')])
+  opcoes($('#msg-grupo'), [new Option('Escolha o grupo...', '')])
+}
+
+// quantas mensagens de cada tipo a pessoa mandou na conversa escolhida no filtro
+const TIPOS = ['texto', 'imagem', 'video', 'audio', 'figurinha', 'outro']
+function contagemDe(u) {
+  const soma = Object.fromEntries(TIPOS.map(t => [t, 0]))
+  for (const [chat, c] of Object.entries(u.contagem ?? {})) {
+    const grupo = chat.endsWith('@g.us')
+    if (conversaUsuarios === '__privado' ? grupo : conversaUsuarios && chat !== conversaUsuarios) continue
+    for (const t of TIPOS) soma[t] += c[t] ?? 0
+  }
+  soma.total = TIPOS.reduce((s, t) => s + soma[t], 0)
+  return soma
+}
+
+// a tabela recebe atualização a cada mensagem do grupo: redesenha no máximo a cada 0,5s,
+// e nunca enquanto você está escolhendo um cargo (o menu fecharia na sua mão)
+let redesenhoPendente = null
+function agendarUsuarios() {
+  if (redesenhoPendente) return
+  redesenhoPendente = setTimeout(() => {
+    redesenhoPendente = null
+    if ($('#lista-usuarios').contains(document.activeElement)) return agendarUsuarios()
+    renderizarUsuarios()
+  }, 500)
 }
 
 async function carregarPessoas() {
@@ -352,10 +396,19 @@ function renderizarUsuarios() {
   filtro.replaceChildren(new Option('Todos os cargos', ''), ...cargos.cargos.map(c => new Option(c.nome, c.id)))
   filtro.value = cargoPorId(atual) ? atual : ''
 
+  if ($('#vista-usuarios').hidden) return
+  const contagens = new Map([...usuarios.values()].map(u => [u.numero, contagemDe(u)]))
+  const valor = u => ordemUsuarios in contagens.get(u.numero) ? contagens.get(u.numero)[ordemUsuarios] : u[ordemUsuarios] ?? 0
   const visiveis = [...usuarios.values()]
     .filter(u => !cargoFiltrado || u.cargoEfetivo === cargoFiltrado)
     .filter(u => !buscaUsuarios || `${u.nome ?? ''} ${u.numero}`.toLowerCase().includes(buscaUsuarios))
-    .sort((a, b) => (b.ultimoContato ?? 0) - (a.ultimoContato ?? 0))
+    // num grupo específico, só aparece quem mandou algo nele
+    .filter(u => !conversaUsuarios || contagens.get(u.numero).total > 0)
+    .sort(ordemUsuarios === 'nome'
+      ? (a, b) => (a.nome || a.numero).localeCompare(b.nome || b.numero)
+      : (a, b) => valor(b) - valor(a))
+  document.querySelectorAll('.ordenar').forEach(b =>
+    b.dataset.ordem === ordemUsuarios ? b.setAttribute('aria-sort', 'descending') : b.removeAttribute('aria-sort'))
 
   const linhas = visiveis.map(u => {
     const tr = document.createElement('tr')
@@ -379,17 +432,123 @@ function renderizarUsuarios() {
     caixa.append(select)
     tdCargo.append(caixa)
 
-    const tdComandos = document.createElement('td')
-    tdComandos.className = 'num'
-    tdComandos.textContent = u.comandos ?? 0
+    const contagem = contagens.get(u.numero)
+    const numeros = ['texto', 'imagem', 'video', 'audio', 'figurinha', 'total'].map(t => contagem[t])
+    numeros.push(u.comandos ?? 0)
+    const tds = numeros.map(n => {
+      const td = document.createElement('td')
+      td.className = n ? 'num' : 'num zero'
+      td.textContent = n.toLocaleString('pt-BR')
+      return td
+    })
     const tdContato = document.createElement('td')
     tdContato.className = 'sutil'
     tdContato.textContent = u.ultimoContato ? tempoRelativo(u.ultimoContato) : '—'
-    tr.append(pessoa, tdCargo, tdComandos, tdContato)
+    tr.append(pessoa, tdCargo, ...tds, tdContato)
     return tr
   })
   $('#lista-usuarios').replaceChildren(...linhas)
   $('#usuarios-vazio').hidden = visiveis.length > 0
+}
+
+// ---------- enviar mensagem com marcação ----------
+let membros = [] // [{ jid, numero, nome, semTelefone, admin }]
+const marcados = new Set() // jids
+let buscaMembros = ''
+
+const nomeDoMembro = m => m.nome || formatarNumero(m)
+
+async function carregarMembros() {
+  marcados.clear()
+  membros = []
+  const grupo = $('#msg-grupo').value
+  $('#membros-vazio').hidden = !!grupo
+  if (grupo) {
+    $('#membros-lista').replaceChildren(Object.assign(document.createElement('li'), { className: 'sutil', textContent: 'Carregando membros...' }))
+    try {
+      membros = await api(`/api/grupos/${encodeURIComponent(grupo)}/membros`)
+    } catch (err) {
+      toast(`Não consegui carregar os membros: ${err.message}`, 'erro')
+    }
+  }
+  renderizarMembros()
+}
+
+function renderizarMembros() {
+  const visiveis = membros.filter(m => !buscaMembros || `${m.nome ?? ''} ${m.numero}`.toLowerCase().includes(buscaMembros))
+  $('#membros-lista').replaceChildren(...visiveis.map(m => {
+    const li = document.createElement('li')
+    li.innerHTML = '<label><input type="checkbox"><span class="avatar"></span><span><strong></strong><small></small></span></label>'
+    const input = li.querySelector('input')
+    input.checked = marcados.has(m.jid)
+    input.addEventListener('change', () => {
+      input.checked ? marcados.add(m.jid) : marcados.delete(m.jid)
+      atualizarPrevia()
+    })
+    li.querySelector('.avatar').textContent = [...nomeDoMembro(m).replace(/^\+/, '')][0]?.toUpperCase() ?? '?'
+    li.querySelector('strong').textContent = nomeDoMembro(m)
+    li.querySelector('small').textContent = m.nome ? formatarNumero(m) : ''
+    if (m.admin) li.querySelector('label').append(Object.assign(document.createElement('span'), { className: 'selo-admin', textContent: 'admin' }))
+    return li
+  }))
+  atualizarPrevia()
+}
+
+function atualizarPrevia() {
+  const texto = $('#msg-texto').value
+  const oculta = $('#msg-oculta').checked
+  const n = marcados.size
+  $('#msg-contador').textContent = `${texto.length}/4000`
+  $('#membros-titulo').textContent = n ? `${n} marcado${n > 1 ? 's' : ''}` : 'Marcar ninguém'
+  const previa = $('#msg-previa')
+  previa.replaceChildren()
+  if (!texto.trim() && !n) {
+    previa.textContent = 'Escreva a mensagem...'
+    previa.classList.add('sutil')
+    return
+  }
+  previa.classList.remove('sutil')
+  previa.append(texto.trim())
+  if (n && !oculta) {
+    if (texto.trim()) previa.append('\n\n')
+    const nomes = membros.filter(m => marcados.has(m.jid)).map(nomeDoMembro)
+    nomes.forEach((nome, i) => {
+      previa.append(Object.assign(document.createElement('span'), { className: 'arroba', textContent: `@${nome}` }))
+      if (i < nomes.length - 1) previa.append(' ')
+    })
+  }
+  if (n && oculta) {
+    previa.append(Object.assign(document.createElement('div'), {
+      className: 'sutil', textContent: `\n(${n} pessoa${n > 1 ? 's' : ''} ser${n > 1 ? 'ão' : 'á'} notificada${n > 1 ? 's' : ''} sem aparecer)`,
+    }))
+  }
+}
+
+async function enviarMensagem(e) {
+  e.preventDefault()
+  const chat = $('#msg-grupo').value
+  const texto = $('#msg-texto').value
+  const oculta = $('#msg-oculta').checked
+  const grupo = grupos.find(g => g.id === chat)
+  if (!chat) return toast('Escolha o grupo', 'erro')
+  if (!texto.trim() && (!marcados.size || oculta)) return toast('Escreva a mensagem', 'erro')
+  const n = marcados.size
+  if (!confirm(`Enviar no grupo "${grupo?.nome ?? chat}"${n ? ` marcando ${n} pessoa${n > 1 ? 's' : ''}` : ''}?`)) return
+  $('#msg-enviar').disabled = true
+  try {
+    await api('/api/mensagem', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat, texto, jids: [...marcados], oculta }),
+    })
+    toast(`Mensagem enviada em ${grupo?.nome ?? 'grupo'} 📣`, 'ok')
+    $('#msg-texto').value = ''
+    marcados.clear()
+    renderizarMembros()
+  } catch (err) {
+    toast(`Não consegui enviar: ${err.message}`, 'erro')
+  } finally {
+    $('#msg-enviar').disabled = false
+  }
 }
 
 async function mudarCargo(numero, cargo) {
@@ -499,6 +658,21 @@ $('#selecionar-todas').addEventListener('click', () => {
 })
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && selecionando) entrarSelecao(false) })
 $('#busca-usuarios').addEventListener('input', e => { buscaUsuarios = e.target.value.trim().toLowerCase(); renderizarUsuarios() })
+$('#conversa-usuarios').addEventListener('change', e => { conversaUsuarios = e.target.value; renderizarUsuarios() })
+document.querySelectorAll('.ordenar').forEach(b => b.addEventListener('click', () => {
+  ordemUsuarios = b.dataset.ordem
+  renderizarUsuarios()
+}))
+$('#form-mensagem').addEventListener('submit', enviarMensagem)
+$('#msg-grupo').addEventListener('change', carregarMembros)
+$('#msg-texto').addEventListener('input', atualizarPrevia)
+$('#msg-oculta').addEventListener('change', atualizarPrevia)
+$('#membros-busca').addEventListener('input', e => { buscaMembros = e.target.value.trim().toLowerCase(); renderizarMembros() })
+$('#membros-todos').addEventListener('click', () => {
+  for (const m of membros) if (!buscaMembros || `${m.nome ?? ''} ${m.numero}`.toLowerCase().includes(buscaMembros)) marcados.add(m.jid)
+  renderizarMembros()
+})
+$('#membros-nenhum').addEventListener('click', () => { marcados.clear(); renderizarMembros() })
 $('#filtro-cargo').addEventListener('change', e => { cargoFiltrado = e.target.value; renderizarUsuarios() })
 $('#cargo-padrao').addEventListener('change', async e => {
   try {

@@ -67,6 +67,7 @@
         <button class="pasta sub" data-vista="cargos">
           Cargos <span class="contador" id="conta-cargos">0</span>
         </button>
+        <button class="pasta sub" data-vista="mensagem">📣 Enviar mensagem</button>
       </div>
     </nav>
 
@@ -143,10 +144,14 @@
       <header class="topo">
         <div>
           <h1>Usuários</h1>
-          <p class="sutil">Todo mundo que manda mensagem ao bot entra aqui. O cargo define o que cada um pode fazer com o !s.</p>
+          <p class="sutil">Todo mundo que manda mensagem ao bot entra aqui, com o que cada um mandou (só você vê).
+            O cargo define o que cada um pode fazer. Clique no título de uma coluna para ordenar.</p>
         </div>
         <div class="filtros">
           <input id="busca-usuarios" type="search" placeholder="Buscar nome ou número..." aria-label="Buscar usuário">
+          <select id="conversa-usuarios" aria-label="Contar mensagens de qual conversa">
+            <option value="">Todas as conversas</option>
+          </select>
           <select id="filtro-cargo" aria-label="Cargo">
             <option value="">Todos os cargos</option>
           </select>
@@ -155,7 +160,18 @@
       <div class="tabela-caixa">
         <table class="tabela">
           <thead>
-            <tr><th>Usuário</th><th>Cargo</th><th class="num">Comandos</th><th>Último contato</th></tr>
+            <tr>
+              <th><button class="ordenar" data-ordem="nome">Usuário</button></th>
+              <th>Cargo</th>
+              <th class="num"><button class="ordenar" data-ordem="texto" title="Mensagens de texto">💬 Texto</button></th>
+              <th class="num"><button class="ordenar" data-ordem="imagem" title="Imagens (inclui visualização única)">🖼️ Imagens</button></th>
+              <th class="num"><button class="ordenar" data-ordem="video" title="Vídeos e GIFs">🎬 Vídeos</button></th>
+              <th class="num"><button class="ordenar" data-ordem="audio" title="Áudios">🎤 Áudios</button></th>
+              <th class="num"><button class="ordenar" data-ordem="figurinha" title="Figurinhas">🟩 Figurinhas</button></th>
+              <th class="num"><button class="ordenar" data-ordem="total" title="Todas as mensagens, inclusive documentos e outros">Total</button></th>
+              <th class="num"><button class="ordenar" data-ordem="comandos" title="Comandos usados (!s, !moeda, dados)">Comandos</button></th>
+              <th><button class="ordenar" data-ordem="ultimoContato">Último contato</button></th>
+            </tr>
           </thead>
           <tbody id="lista-usuarios"></tbody>
         </table>
@@ -164,6 +180,56 @@
         <div class="vazio-icone">👥</div>
         <p>Ninguém por aqui ainda.</p>
         <p class="sutil">Quem mandar mensagem para o bot (no privado ou em grupo) aparece aqui.</p>
+      </div>
+    </div>
+
+    <!-- ===== enviar mensagem com marcação ===== -->
+    <div id="vista-mensagem" hidden>
+      <header class="topo">
+        <div>
+          <h1>Enviar mensagem</h1>
+          <p class="sutil">Escreva, escolha quem marcar e o bot envia no grupo.</p>
+        </div>
+      </header>
+
+      <div class="envio">
+        <form id="form-mensagem" class="cartao envio-texto">
+          <label class="campo">
+            <span>Grupo</span>
+            <select id="msg-grupo" required>
+              <option value="">Carregando grupos...</option>
+            </select>
+          </label>
+          <label class="campo">
+            <span>Mensagem <span id="msg-contador" class="sutil">0/4000</span></span>
+            <textarea id="msg-texto" rows="6" maxlength="4000" placeholder="Ex.: Pessoal, reunião hoje às 20h!"></textarea>
+          </label>
+          <label class="permissao">
+            <span>
+              <strong>Marcação oculta</strong><br>
+              <span class="sutil">Quem for marcado recebe a notificação, mas os @ não aparecem na mensagem</span>
+            </span>
+            <input id="msg-oculta" type="checkbox" role="switch">
+            <span class="trilho" aria-hidden="true"></span>
+          </label>
+          <div class="campo">
+            <span>Como vai ficar</span>
+            <div id="msg-previa" class="previa sutil">Escreva a mensagem...</div>
+          </div>
+          <button id="msg-enviar" class="botao" type="submit">📣 Enviar no grupo</button>
+        </form>
+
+        <section class="cartao envio-membros">
+          <div class="membros-topo">
+            <strong id="membros-titulo">Marcar ninguém</strong>
+            <span class="espaco"></span>
+            <button id="membros-todos" class="botao-texto" type="button">Marcar todos</button>
+            <button id="membros-nenhum" class="botao-texto" type="button">Limpar</button>
+          </div>
+          <input id="membros-busca" type="search" placeholder="Buscar membro..." aria-label="Buscar membro">
+          <ul id="membros-lista" class="membros-lista"></ul>
+          <p id="membros-vazio" class="sutil" hidden>Escolha um grupo para ver os membros.</p>
+        </section>
       </div>
     </div>
 

@@ -85,19 +85,30 @@ export function nomeDoUsuario(numero) {
   return dados.usuarios[numero]?.nome
 }
 
-// chamado a cada mensagem recebida; `semTelefone` = só temos o id interno (LID) da pessoa
-export function registrar(numero, { nome, comando = false, semTelefone = false } = {}) {
+export function obterUsuario(numero) {
+  const u = dados.usuarios[numero]
+  return u ? publicoUsuario(u) : null
+}
+
+// tipos de mensagem contados por pessoa (só no painel)
+export const TIPOS_MENSAGEM = ['texto', 'imagem', 'video', 'audio', 'figurinha', 'outro']
+
+// chamado a cada mensagem recebida; `semTelefone` = só temos o id interno (LID) da pessoa.
+// `chat` + `tipo` somam na contagem da pessoa naquela conversa.
+export function registrar(numero, { nome, comando = false, semTelefone = false, chat, tipo } = {}) {
   if (!numero) return
   const agora = Date.now()
-  const novo = !dados.usuarios[numero]
   const u = dados.usuarios[numero] ??= { numero, cargo: null, comandos: 0, primeiroContato: agora }
   if (nome) u.nome = nome
   u.semTelefone = semTelefone
   u.ultimoContato = agora
   if (comando) u.comandos = (u.comandos ?? 0) + 1
+  if (chat && TIPOS_MENSAGEM.includes(tipo)) {
+    const c = ((u.contagem ??= {})[chat] ??= {})
+    c[tipo] = (c[tipo] ?? 0) + 1
+  }
   salvar()
-  // mensagem comum de quem já está na lista não precisa atualizar o painel na hora
-  if (novo || comando) usuariosEvents.emit('usuario', publicoUsuario(u))
+  usuariosEvents.emit('usuario', publicoUsuario(u))
 }
 
 function publicoUsuario(u) {

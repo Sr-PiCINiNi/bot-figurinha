@@ -8,7 +8,9 @@ import path from 'node:path'
 import QRCode from 'qrcode'
 import { log, logErro, logEvents, linhasRecentes } from './log.js'
 import * as store from './store.js'
-import { wa, estado, fazerFigurinhaDoPainel, reconectar } from './whatsapp.js'
+import {
+  wa, estado, fazerFigurinhaDoPainel, reconectar, listarGrupos, membrosDoGrupo, enviarComMarcacao,
+} from './whatsapp.js'
 import { config, configEvents, alterarConfig } from './config.js'
 import * as usuarios from './usuarios.js'
 
@@ -122,6 +124,30 @@ async function rotear(req, res) {
     req.on('close', () => ouvintes.delete(res))
     return
   }
+  // ---- grupos e mensagem com marcação ----
+  try {
+    if (rota === '/api/grupos' && metodo === 'GET') return json(res, 200, await listarGrupos())
+    // o painel manda o id do grupo codificado (o @ vira %40)
+    const mg = /^\/api\/grupos\/([^/]+)\/membros$/.exec(rota)
+    if (mg && metodo === 'GET') {
+      const grupo = decodeURIComponent(mg[1])
+      if (!/^\d{5,40}@g\.us$/.test(grupo)) return json(res, 400, { erro: 'grupo inválido' })
+      return json(res, 200, await membrosDoGrupo(grupo))
+    }
+    if (rota === '/api/mensagem' && metodo === 'POST') {
+      const { chat, texto, jids, oculta } = await lerCorpo(req, 100_000)
+      if (typeof chat !== 'string' || !Array.isArray(jids) || !jids.every(j => typeof j === 'string')) {
+        return json(res, 400, { erro: 'dados inválidos' })
+      }
+      if (String(texto ?? '').length > 4000) return json(res, 400, { erro: 'mensagem longa demais (máx. 4000)' })
+      await enviarComMarcacao(chat, texto, jids, !!oculta)
+      return json(res, 200, { ok: true })
+    }
+  } catch (err) {
+    logErro('❌ Painel:', err.message)
+    return json(res, 400, { erro: err.message })
+  }
+
   // ---- usuários e cargos ----
   if (rota === '/api/usuarios' && metodo === 'GET') return json(res, 200, usuarios.listarUsuarios())
   if (rota === '/api/cargos' && metodo === 'GET') {

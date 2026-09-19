@@ -85,6 +85,10 @@ Para abrir o painel depois, use o atalho **Bot Figurinha** da Área de Trabalho 
   quantos comandos usou e quando falou por último. Escolha o **cargo** de cada um ali mesmo.
 - **🏷️ Cargos:** cada cargo define se o `!s` funciona em **Fotos**, **Vídeos e GIFs** e **Visualização única**.
   Vêm prontos o *Bloqueado* (nada), o *Comum* (fotos e vídeos) e o *VIP* (tudo). Dá para editar, criar e apagar.
+- **Acompanhamento (só no painel):** a lista mostra quantas mensagens de texto, imagens, vídeos, áudios e
+  figurinhas cada pessoa mandou, no total ou por grupo. Clique no título da coluna para ordenar.
+- **📣 Enviar mensagem:** escolha o grupo, escreva, marque os membros e o bot envia. Com a **marcação oculta**, as
+  pessoas são notificadas sem os @ aparecerem no texto.
 - **Cargo de quem chega:** escolha qual cargo os novos usuários recebem.
 - Se a pessoa pedir algo que o cargo não libera, o bot responde explicando. Um cargo sem nenhuma permissão
   (como o Bloqueado) é ignorado em silêncio.

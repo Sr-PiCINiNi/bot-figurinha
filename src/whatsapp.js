@@ -97,6 +97,21 @@ function getContextInfo(m) {
   return null
 }
 
+// categoria usada na contagem por membro (texto, imagem, video, audio, figurinha, outro)
+function tipoDaMensagem(content, msg) {
+  if (!content) return msg.key.isViewOnce ? 'imagem' : 'outro' // visualização única chega vazia
+  if (content.conversation != null || content.extendedTextMessage) return 'texto'
+  if (content.imageMessage) return 'imagem'
+  if (content.videoMessage || content.ptvMessage) return 'video'
+  if (content.audioMessage) return 'audio'
+  if (content.stickerMessage || content.lottieStickerMessage) return 'figurinha'
+  const mime = content.documentMessage?.mimetype ?? ''
+  if (mime.startsWith('image/')) return 'imagem'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  return 'outro'
+}
+
 function ehVisualizacaoUnica(raw, media) {
   return !!(media?.viewOnce || raw?.viewOnceMessage || raw?.viewOnceMessageV2 || raw?.viewOnceMessageV2Extension)
 }
@@ -279,7 +294,10 @@ async function tratarMensagem(msg, type) {
   // todo mundo que manda mensagem entra na lista de usuários do painel (o número do bot não)
   const autor = msg.key.fromMe ? null : await quemMandou(msg)
   if (autor && type === 'notify') {
-    usuarios.registrar(autor.numero, { nome: msg.pushName, comando: comando || !!jogo, semTelefone: autor.semTelefone })
+    usuarios.registrar(autor.numero, {
+      nome: msg.pushName, comando: comando || !!jogo, semTelefone: autor.semTelefone,
+      chat: jid, tipo: tipoDaMensagem(content, msg),
+    })
   }
 
   if (jogo && type === 'notify') {
@@ -658,6 +676,62 @@ function registrarEntrega(id, status) {
     clearTimeout(a.timer)
     acompanhadas.delete(id)
   }
+}
+
+// ---- grupos e mensagem com marcação (painel) ----
+
+function exigirConexao() {
+  if (estado.status !== 'conectado') throw new Error('o bot não está conectado ao WhatsApp')
+}
+
+// grupos em que o bot está
+export async function listarGrupos() {
+  exigirConexao()
+  const grupos = await sock.groupFetchAllParticipating()
+  return Object.values(grupos)
+    .map(g => {
+      nomesDeGrupo.set(g.id, g.subject || 'Grupo')
+      return { id: g.id, nome: g.subject || 'Grupo', membros: g.participants?.length ?? 0 }
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome))
+}
+
+// membros do grupo, com o id exato para marcar (LID ou telefone, do jeito que o grupo usa)
+export async function membrosDoGrupo(chat) {
+  exigirConexao()
+  const meta = await sock.groupMetadata(chat)
+  const eu = digits(sock.user?.id)
+  const membros = []
+  for (const p of meta.participants) {
+    const numero = p.phoneNumber ? digits(p.phoneNumber) : await numeroDe(p.id)
+    if (numero === eu) continue
+    const u = usuarios.obterUsuario(numero)
+    membros.push({
+      jid: p.id,
+      numero,
+      semTelefone: p.id.endsWith('@lid') && numero === digits(p.id),
+      nome: u?.nome ?? null,
+      admin: !!p.admin,
+    })
+  }
+  return membros.sort((a, b) => (a.nome ?? `~${a.numero}`).localeCompare(b.nome ?? `~${b.numero}`))
+}
+
+// Manda `texto` no grupo marcando `jids`. Marcação visível: os @ vão no fim do texto.
+// Oculta: as pessoas são notificadas, mas o texto não mostra os @.
+export async function enviarComMarcacao(chat, texto, jids, oculta) {
+  exigirConexao()
+  if (!chat.endsWith('@g.us')) throw new Error('escolha um grupo')
+  const corpo = String(texto ?? '').trim()
+  if (!corpo && (!jids.length || oculta)) throw new Error('escreva a mensagem')
+  const validos = new Set((await sock.groupMetadata(chat)).participants.map(p => p.id))
+  const marcados = [...new Set(jids)].filter(j => validos.has(j))
+  if (marcados.length !== new Set(jids).size) throw new Error('alguém selecionado não está mais no grupo')
+  const arrobas = marcados.map(j => `@${j.split('@')[0]}`).join(' ')
+  const final = oculta || !marcados.length ? corpo : [corpo, arrobas].filter(Boolean).join('\n\n')
+  await sock.sendMessage(chat, { text: final, mentions: marcados })
+  log(`📣 Mensagem enviada pelo painel em ${nomesDeGrupo.get(chat) ?? chat}` +
+      (marcados.length ? ` marcando ${marcados.length} pessoa${marcados.length > 1 ? 's' : ''}${oculta ? ' (oculto)' : ''}` : ''))
 }
 
 // clique no painel

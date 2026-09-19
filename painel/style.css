@@ -469,6 +469,96 @@ body.selecionando .card[data-bloqueado] .card-principal { cursor: pointer; }
   cursor: pointer;
 }
 
+.ordenar {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+.ordenar:hover { color: var(--texto); }
+.ordenar[aria-sort]::after { content: " ↓"; color: var(--verde-forte); }
+.tabela td.zero { color: var(--sutil); opacity: .5; }
+
+/* ---------- enviar mensagem ---------- */
+.envio {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--raio);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+.campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
+.campo > span { display: flex; justify-content: space-between; }
+.campo select, .campo textarea, .envio-membros input[type="search"] {
+  padding: 9px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  background: var(--fundo);
+  color: var(--texto);
+  font: inherit;
+  font-weight: 400;
+}
+.campo textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+.campo select:focus, .campo textarea:focus, .envio-membros input:focus { outline: 2px solid var(--verde); outline-offset: -1px; }
+.previa {
+  min-height: 60px;
+  padding: 12px 14px;
+  border-radius: 10px 10px 10px 2px;
+  background: var(--verde-suave);
+  color: var(--texto);
+  font-weight: 400;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.previa .arroba { color: #53bdeb; font-weight: 600; }
+.envio .permissao { padding: 10px 0; }
+
+.membros-topo { display: flex; align-items: center; gap: 6px; }
+.membros-topo .espaco { flex: 1; }
+.membros-topo .botao-texto { padding: 6px 8px; color: var(--verde-forte); }
+.membros-lista {
+  max-height: 460px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+.membros-lista label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.membros-lista label:hover { background: var(--superficie-2); }
+.membros-lista input { width: 18px; height: 18px; accent-color: var(--verde); flex: none; }
+.membros-lista .avatar { width: 30px; height: 30px; font-size: 13px; }
+.membros-lista strong { display: block; font-size: 13px; }
+.membros-lista small { font-size: 12px; color: var(--sutil); }
+.selo-admin {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--superficie-2);
+  font-size: 11px;
+  color: var(--sutil);
+}
+
+@media (max-width: 1000px) {
+  .envio { grid-template-columns: 1fr; }
+}
+
 /* ---------- cargos ---------- */
 .campo-padrao { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .campo-padrao select {
