@@ -354,6 +354,61 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -.01em; }
 .vazio-icone { font-size: 46px; }
 .vazio p { margin: 6px 0; }
 
+/* ---------- modo seleção ---------- */
+.botao-contorno {
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  background: var(--superficie);
+  white-space: nowrap;
+}
+.botao-contorno:hover { border-color: var(--verde); }
+.botao-contorno[aria-pressed="true"] { background: var(--verde-suave); border-color: var(--verde); color: var(--verde-forte); font-weight: 600; }
+.botao.perigo { background: #e5484d; }
+.botao.perigo:hover { background: #c0373c; }
+.botao:disabled { opacity: .45; cursor: not-allowed; }
+
+.barra-selecao {
+  position: sticky;
+  top: 10px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--verde);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+.barra-selecao .espaco { flex: 1; }
+.barra-selecao .botao-texto { color: var(--texto); }
+
+.marcador {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: rgb(0 0 0 / .35);
+  box-shadow: 0 1px 4px rgb(0 0 0 / .4);
+}
+body.selecionando .marcador { display: grid; }
+body.selecionando .sobreposicao { display: none; }
+body.selecionando .card-principal { cursor: pointer; }
+body.selecionando .card[data-bloqueado] .card-principal { cursor: pointer; }
+.card[data-selecionado] { outline: 3px solid var(--verde); outline-offset: -3px; }
+.card[data-selecionado] .marcador { background: var(--verde); border-color: var(--verde); }
+.card[data-selecionado] .marcador::after { content: "✓"; color: #fff; font-size: 14px; font-weight: 800; }
+.card[data-selecionado] .miniatura img { transform: scale(.94); }
+
 /* ---------- usuários ---------- */
 .tabela-caixa {
   border-radius: var(--raio);

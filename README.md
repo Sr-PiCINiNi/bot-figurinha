@@ -76,6 +76,7 @@ Para abrir o painel depois, use o atalho **Bot Figurinha** da Área de Trabalho 
   - **🖼️ Normais:** Fotos, Vídeos
 - **Clique numa mídia** e a figurinha é feita e enviada na conversa de onde ela veio.
 - **Busca e filtro** por conversa ficam no topo. **📜 Atividade** mostra o que o bot está fazendo.
+- **☑️ Selecionar:** marca várias mídias (ou *Selecionar todas* as da tela) e apaga de uma vez.
 - O interruptor **Comando !s** liga ou desliga o comando no WhatsApp.
 
 ### Usuários e cargos
@@ -96,8 +97,11 @@ Para abrir o painel depois, use o atalho **Bot Figurinha** da Área de Trabalho 
 | Mandar foto/vídeo/GIF com **`!s`** na legenda | vira figurinha |
 | **Responder** a uma foto/vídeo/GIF com **`!s`** | vira figurinha |
 | **Responder** a uma figurinha com **`!s`** | volta a ser foto/vídeo (em qualidade original, se foi feita pelo bot) |
+| **`!moeda`** | 🪙 cara ou coroa |
+| **`!d20`** | 🎲 número de 1 a 20 (20 = acerto crítico, 1 = falha crítica) |
 
-Também funcionam `.s`, `/s`, `!fig` e `!sticker`.
+Também funcionam `.s`, `/s`, `!fig` e `!sticker`. Quem está num cargo sem nenhuma permissão (como o Bloqueado)
+é ignorado em todos os comandos.
 
 ### ⚠️ Visualização única
 

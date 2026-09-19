@@ -16,6 +16,7 @@ import makeWASocket, {
 import pino from 'pino'
 import qrcodeTerminal from 'qrcode-terminal'
 import { EventEmitter } from 'node:events'
+import { randomInt } from 'node:crypto'
 import { readFile, renameSync } from 'node:fs'
 import { promisify } from 'node:util'
 import path from 'node:path'
@@ -37,6 +38,8 @@ const ATRASO_MAX_COMANDO = 10 * 60
 const MAX_AUTO_MB = 64
 // "!s", ".s", "/s", "!fig", "!sticker" (no texto ou na legenda)
 const COMANDO = /^[!./](s|fig|figurinha|sticker)(\s|$)/i
+// comandos de sorteio: !moeda (cara ou coroa) e !d20 (1 a 20)
+const JOGO = /^[!./](moeda|d20)\s*$/i
 
 export const wa = new EventEmitter()
 export const estado = { status: 'iniciando', qr: null, eu: null, detalhe: '' }
@@ -258,12 +261,20 @@ async function tratarMensagem(msg, type) {
   const content = normalizeMessageContent(msg.message)
   if (content?.protocolMessage || content?.reactionMessage) return
 
+  const texto = getText(content).trim()
   // com o !s desligado no painel, o comando vira mensagem comum (a mídia ainda vai para o painel)
-  const comando = config.comandoAtivo && COMANDO.test(getText(content).trim())
+  const comando = config.comandoAtivo && COMANDO.test(texto)
+  const jogo = JOGO.exec(texto)?.[1]?.toLowerCase()
   // todo mundo que manda mensagem entra na lista de usuários do painel (o número do bot não)
   const autor = msg.key.fromMe ? null : await quemMandou(msg)
-  if (autor && type === 'notify') usuarios.registrar(autor.numero, { nome: msg.pushName, comando, semTelefone: autor.semTelefone })
+  if (autor && type === 'notify') {
+    usuarios.registrar(autor.numero, { nome: msg.pushName, comando: comando || !!jogo, semTelefone: autor.semTelefone })
+  }
 
+  if (jogo && type === 'notify') {
+    await tratarJogo(msg, jogo, autor?.numero ?? null)
+    return
+  }
   if (comando) {
     await tratarComando(msg, content, autor?.numero ?? null)
     return
@@ -371,6 +382,21 @@ async function baixarPara(item, msg, content, found) {
     store.atualizar(item.id, { disponivel: false, motivo: 'erro' })
     throw err
   }
+}
+
+// !moeda e !d20. Quem está num cargo sem nenhuma permissão (ex.: Bloqueado) é ignorado, como no !s.
+async function tratarJogo(msg, jogo, autor) {
+  if (autor && !usuarios.podeAlgo(autor)) return
+  if (toSeconds(msg.messageTimestamp) < startedAt - ATRASO_MAX_COMANDO) return
+  let resposta
+  if (jogo === 'moeda') {
+    resposta = randomInt(2) ? '🪙 Deu *cara*!' : '🪙 Deu *coroa*!'
+  } else {
+    const n = randomInt(1, 21)
+    resposta = `🎲 Tirou *${n}*` + (n === 20 ? ' — acerto crítico! 🔥' : n === 1 ? ' — falha crítica! 💀' : '')
+  }
+  await sock.sendMessage(msg.key.remoteJid, { text: resposta }, { quoted: msg }).catch(() => {})
+  log(`🎲 !${jogo} de ${msg.pushName || autor || 'você'}: ${resposta.replace(/\*/g, '')}`)
 }
 
 // autor = número de quem mandou o !s; null quando foi o próprio número do bot (que sempre pode tudo)

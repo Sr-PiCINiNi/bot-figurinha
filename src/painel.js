@@ -30,12 +30,12 @@ async function estadoPublico() {
   return { ...resto, config: { ...config }, qrSvg: qr ? await QRCode.toString(qr, { type: 'svg', margin: 1 }) : null }
 }
 
-function lerCorpo(req) {
+function lerCorpo(req, limite = 10_000) {
   return new Promise((resolve, reject) => {
     let corpo = ''
     req.on('data', parte => {
       corpo += parte
-      if (corpo.length > 10_000) reject(new Error('corpo grande demais'))
+      if (corpo.length > limite) reject(new Error('corpo grande demais'))
     })
     req.on('end', () => {
       try { resolve(JSON.parse(corpo || '{}')) } catch { reject(new Error('JSON inválido')) }
@@ -162,6 +162,18 @@ async function rotear(req, res) {
   if (rota === '/api/reconectar' && metodo === 'POST') {
     reconectar()
     return json(res, 200, { ok: true })
+  }
+
+  // apagar várias de uma vez (modo seleção do painel)
+  if (rota === '/api/midias/apagar' && metodo === 'POST') {
+    const { ids } = await lerCorpo(req, 200_000)
+    if (!Array.isArray(ids) || ids.length > 5000 || !ids.every(id => /^[0-9a-f]{16}$/.test(id))) {
+      return json(res, 400, { erro: 'lista de mídias inválida' })
+    }
+    let apagadas = 0
+    for (const id of ids) if (await store.remover(id)) apagadas++
+    log(`🗑️ ${apagadas} mídia${apagadas === 1 ? '' : 's'} apagada${apagadas === 1 ? '' : 's'} pelo painel`)
+    return json(res, 200, { apagadas })
   }
 
   const m = /^\/api\/midias\/([0-9a-f]{16})(?:\/(arquivo|miniatura|figurinha|mostrar))?$/.exec(rota)

@@ -109,8 +109,18 @@
         <select id="filtro-chat" aria-label="Conversa">
           <option value="">Todas as conversas</option>
         </select>
+        <button id="modo-selecao" class="botao-contorno" aria-pressed="false">☑️ Selecionar</button>
       </div>
     </header>
+
+    <div id="barra-selecao" class="barra-selecao" hidden>
+      <strong id="selecao-texto">Nenhuma selecionada</strong>
+      <span class="sutil">Clique nas mídias para marcar</span>
+      <span class="espaco"></span>
+      <button id="selecionar-todas" class="botao-texto">Selecionar todas</button>
+      <button id="apagar-selecionadas" class="botao perigo" disabled>🗑️ Apagar</button>
+      <button id="cancelar-selecao" class="botao-texto">Cancelar</button>
+    </div>
 
     <section id="aviso-visu" class="aviso" hidden>
       <strong>Por que algumas estão bloqueadas?</strong>
@@ -215,6 +225,7 @@
           <span class="duracao"></span>
           <div class="sobreposicao"><span>✨ Fazer figurinha</span></div>
           <div class="trabalhando"><span class="giro"></span></div>
+          <span class="marcador" aria-hidden="true"></span>
         </div>
         <div class="info">
           <span class="chat"></span>

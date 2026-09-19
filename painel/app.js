@@ -100,6 +100,7 @@ function selo(m) {
 
 function preencherCard(el, m) {
   el.dataset.id = m.id
+  el.toggleAttribute('data-selecionado', selecionadas.has(m.id))
   const bloqueado = m.motivo === 'visualizacao-unica'
   el.toggleAttribute('data-bloqueado', bloqueado)
   el.toggleAttribute('data-indisponivel', !m.disponivel && !bloqueado)
@@ -129,7 +130,11 @@ function preencherCard(el, m) {
 
 function novoCard(m) {
   const el = $('#card').content.firstElementChild.cloneNode(true)
-  el.querySelector('.card-principal').addEventListener('click', () => fazerFigurinha(el.dataset.id))
+  // no modo seleção o clique marca/desmarca; fora dele, faz a figurinha
+  el.querySelector('.card-principal').addEventListener('click', () => {
+    if (selecionando) alternarSelecao(el.dataset.id)
+    else fazerFigurinha(el.dataset.id)
+  })
   el.querySelector('.mostrar').addEventListener('click', () => api(`/api/midias/${el.dataset.id}/mostrar`, { method: 'POST' }))
   el.querySelector('.apagar').addEventListener('click', () => apagar(el.dataset.id))
   preencherCard(el, m)
@@ -153,6 +158,57 @@ function renderizar() {
   $('#aviso-visu').hidden = !(filtro.startsWith('visualizacao-unica') ||
     (filtro === 'tudo' && [...midias.values()].some(m => m.motivo === 'visualizacao-unica')))
   contar()
+  atualizarBarraSelecao()
+}
+
+// ---------- modo seleção (apagar várias) ----------
+let selecionando = false
+const selecionadas = new Set()
+
+function visiveisAgora() {
+  return [...midias.values()].filter(m => passaNaPasta(m) && passaNaBusca(m))
+}
+
+function entrarSelecao(ligar) {
+  selecionando = ligar
+  if (!ligar) selecionadas.clear()
+  document.body.classList.toggle('selecionando', ligar)
+  $('#modo-selecao').setAttribute('aria-pressed', String(ligar))
+  $('#barra-selecao').hidden = !ligar
+  renderizar()
+}
+
+function alternarSelecao(id) {
+  if (selecionadas.has(id)) selecionadas.delete(id)
+  else selecionadas.add(id)
+  document.querySelector(`.card[data-id="${id}"]`)?.toggleAttribute('data-selecionado', selecionadas.has(id))
+  atualizarBarraSelecao()
+}
+
+function atualizarBarraSelecao() {
+  for (const id of selecionadas) if (!midias.has(id)) selecionadas.delete(id) // apagadas por outro caminho
+  const n = selecionadas.size
+  $('#selecao-texto').textContent = n ? `${n} selecionada${n > 1 ? 's' : ''}` : 'Nenhuma selecionada'
+  $('#apagar-selecionadas').disabled = n === 0
+  const visiveis = visiveisAgora()
+  const todas = visiveis.length > 0 && visiveis.every(m => selecionadas.has(m.id))
+  $('#selecionar-todas').textContent = todas ? 'Desmarcar todas' : 'Selecionar todas'
+}
+
+async function apagarSelecionadas() {
+  const ids = [...selecionadas]
+  if (!ids.length || !confirm(`Apagar ${ids.length} mídia${ids.length > 1 ? 's' : ''} do computador?`)) return
+  $('#apagar-selecionadas').disabled = true
+  try {
+    const { apagadas } = await api('/api/midias/apagar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }),
+    })
+    toast(`${apagadas} mídia${apagadas === 1 ? '' : 's'} apagada${apagadas === 1 ? '' : 's'}`, 'ok')
+    entrarSelecao(false)
+  } catch (err) {
+    toast(`Não consegui apagar: ${err.message}`, 'erro')
+    atualizarBarraSelecao()
+  }
 }
 
 // ---------- ações ----------
@@ -432,6 +488,16 @@ document.querySelectorAll('.pasta').forEach(botao => {
   })
 })
 $('#busca').addEventListener('input', e => { busca = e.target.value.trim().toLowerCase(); renderizar() })
+$('#modo-selecao').addEventListener('click', () => entrarSelecao(!selecionando))
+$('#cancelar-selecao').addEventListener('click', () => entrarSelecao(false))
+$('#apagar-selecionadas').addEventListener('click', apagarSelecionadas)
+$('#selecionar-todas').addEventListener('click', () => {
+  const visiveis = visiveisAgora()
+  const todas = visiveis.every(m => selecionadas.has(m.id))
+  for (const m of visiveis) todas ? selecionadas.delete(m.id) : selecionadas.add(m.id)
+  renderizar()
+})
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && selecionando) entrarSelecao(false) })
 $('#busca-usuarios').addEventListener('input', e => { buscaUsuarios = e.target.value.trim().toLowerCase(); renderizarUsuarios() })
 $('#filtro-cargo').addEventListener('change', e => { cargoFiltrado = e.target.value; renderizarUsuarios() })
 $('#cargo-padrao').addEventListener('change', async e => {
