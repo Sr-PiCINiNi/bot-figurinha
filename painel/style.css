@@ -446,6 +446,15 @@ body.selecionando .card[data-bloqueado] .card-principal { cursor: pointer; }
 .pessoa strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
 .pessoa span { font-size: 12px; }
 
+.selo-dono {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #f5a52422;
+  color: #d48806;
+  font-size: 13px;
+  font-weight: 700;
+}
 .seletor-cargo { position: relative; display: inline-flex; align-items: center; }
 .seletor-cargo::before {
   content: "";

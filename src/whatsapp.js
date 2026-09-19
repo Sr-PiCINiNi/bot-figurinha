@@ -205,6 +205,7 @@ export async function iniciarWhatsApp() {
       falhas = 0
       const eu = { id: atual.user?.id, nome: atual.user?.name ?? '', numero: digits(atual.user?.id) }
       mudarEstado({ status: 'conectado', qr: null, eu, detalhe: '' })
+      usuarios.garantirDono(eu.numero, eu.nome)
       log(`✅ Conectado como ${eu.nome || eu.numero}`)
       // conflito só zera depois de ficar 1 min conectado sem ser derrubado
       setTimeout(() => { if (sock === atual && estado.status === 'conectado') conflitos = 0 }, 60_000)
@@ -296,6 +297,14 @@ async function tratarMensagem(msg, type) {
   if (autor && type === 'notify') {
     usuarios.registrar(autor.numero, {
       nome: msg.pushName, comando: comando || !!jogo, semTelefone: autor.semTelefone,
+      chat: jid, tipo: tipoDaMensagem(content, msg),
+    })
+  }
+  // o dono também entra na lista: o que ele digita no celular do bot chega como notify; o que o bot
+  // envia sozinho (figurinhas, respostas) chega como append e não é contado
+  if (msg.key.fromMe && type === 'notify') {
+    usuarios.registrar(digits(sock.user?.id), {
+      nome: sock.user?.name || msg.pushName || 'Você', comando: comando || !!jogo, dono: true,
       chat: jid, tipo: tipoDaMensagem(content, msg),
     })
   }

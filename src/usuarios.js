@@ -95,18 +95,30 @@ export const TIPOS_MENSAGEM = ['texto', 'imagem', 'video', 'audio', 'figurinha',
 
 // chamado a cada mensagem recebida; `semTelefone` = só temos o id interno (LID) da pessoa.
 // `chat` + `tipo` somam na contagem da pessoa naquela conversa.
-export function registrar(numero, { nome, comando = false, semTelefone = false, chat, tipo } = {}) {
+// `dono` = o número do próprio bot (sempre pode tudo; aparece na lista só para o acompanhamento)
+export function registrar(numero, { nome, comando = false, semTelefone = false, dono = false, chat, tipo } = {}) {
   if (!numero) return
   const agora = Date.now()
   const u = dados.usuarios[numero] ??= { numero, cargo: null, comandos: 0, primeiroContato: agora }
   if (nome) u.nome = nome
   u.semTelefone = semTelefone
+  if (dono) u.dono = true
   u.ultimoContato = agora
   if (comando) u.comandos = (u.comandos ?? 0) + 1
   if (chat && TIPOS_MENSAGEM.includes(tipo)) {
     const c = ((u.contagem ??= {})[chat] ??= {})
     c[tipo] = (c[tipo] ?? 0) + 1
   }
+  salvar()
+  usuariosEvents.emit('usuario', publicoUsuario(u))
+}
+
+// ao conectar: o dono aparece na lista mesmo antes de mandar a primeira mensagem
+export function garantirDono(numero, nome) {
+  if (!numero) return
+  const u = dados.usuarios[numero] ??= { numero, cargo: null, comandos: 0, primeiroContato: Date.now() }
+  u.dono = true
+  if (nome) u.nome = nome
   salvar()
   usuariosEvents.emit('usuario', publicoUsuario(u))
 }
@@ -132,6 +144,7 @@ export function definirCargo(numero, cargoId) {
 export function estadoCargos() {
   const contagem = {}
   for (const u of Object.values(dados.usuarios)) {
+    if (u.dono) continue // o dono não usa cargo
     const id = cargoDe(u.numero)?.id
     contagem[id] = (contagem[id] ?? 0) + 1
   }

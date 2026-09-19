@@ -400,7 +400,7 @@ function renderizarUsuarios() {
   const contagens = new Map([...usuarios.values()].map(u => [u.numero, contagemDe(u)]))
   const valor = u => ordemUsuarios in contagens.get(u.numero) ? contagens.get(u.numero)[ordemUsuarios] : u[ordemUsuarios] ?? 0
   const visiveis = [...usuarios.values()]
-    .filter(u => !cargoFiltrado || u.cargoEfetivo === cargoFiltrado)
+    .filter(u => !cargoFiltrado || (!u.dono && u.cargoEfetivo === cargoFiltrado))
     .filter(u => !buscaUsuarios || `${u.nome ?? ''} ${u.numero}`.toLowerCase().includes(buscaUsuarios))
     // num grupo específico, só aparece quem mandou algo nele
     .filter(u => !conversaUsuarios || contagens.get(u.numero).total > 0)
@@ -420,6 +420,9 @@ function renderizarUsuarios() {
     pessoa.querySelector('.sutil').textContent = u.nome ? formatarNumero(u) : ''
 
     const tdCargo = document.createElement('td')
+    if (u.dono) {
+      tdCargo.innerHTML = '<span class="selo-dono" title="Número do bot: sempre pode tudo">👑 Dono</span>'
+    } else {
     const caixa = document.createElement('span')
     caixa.className = 'seletor-cargo'
     const select = document.createElement('select')
@@ -431,6 +434,7 @@ function renderizarUsuarios() {
     select.addEventListener('change', () => mudarCargo(u.numero, select.value || null))
     caixa.append(select)
     tdCargo.append(caixa)
+    }
 
     const contagem = contagens.get(u.numero)
     const numeros = ['texto', 'imagem', 'video', 'audio', 'figurinha', 'total'].map(t => contagem[t])
