@@ -42,7 +42,7 @@ const COMANDO = /^[!./](s|fig|figurinha|sticker)(\s|$)/i
 const MOEDA = /^[!./]moeda\s*$/i
 const DADOS = /^[!./](\d*)d(\d+)\s*$/i
 const MAX_DADOS = 10
-const MAX_LADOS = 20
+const MAX_LADOS = 100
 
 // { tipo: 'moeda' } ou { tipo: 'dados', qtd, lados }; null se não for comando de sorteio
 function lerJogo(texto) {
@@ -428,7 +428,7 @@ function jogarMoeda() {
 // ex.: "🎲 *5d6*: 3 + 6 + 1 + 4 + 2 = *16*"; um d20 sozinho ainda avisa acerto/falha crítica
 export function jogarDados(qtd, lados) {
   if (qtd < 1 || qtd > MAX_DADOS || lados < 2 || lados > MAX_LADOS) {
-    return `🎲 Dá para jogar de 1 a ${MAX_DADOS} dados de 2 a ${MAX_LADOS} lados. Ex.: *!d20*, *!5d6*, *!3d8*`
+    return `🎲 Dá para jogar de 1 a ${MAX_DADOS} dados de 2 a ${MAX_LADOS} lados. Ex.: *!d20*, *!5d6*, *!d100*`
   }
   const valores = Array.from({ length: qtd }, () => randomInt(1, lados + 1))
   const soma = valores.reduce((a, b) => a + b, 0)

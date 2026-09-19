@@ -98,7 +98,7 @@ Para abrir o painel depois, use o atalho **Bot Figurinha** da Área de Trabalho 
 | **Responder** a uma foto/vídeo/GIF com **`!s`** | vira figurinha |
 | **Responder** a uma figurinha com **`!s`** | volta a ser foto/vídeo (em qualidade original, se foi feita pelo bot) |
 | **`!moeda`** | 🪙 cara ou coroa |
-| **`!d20`**, **`!5d6`**, **`!3d8`**... | 🎲 joga até 10 dados de até 20 lados, mostra cada valor e a soma (ex.: `🎲 5d6: 3 + 6 + 1 + 4 + 2 = 16`). Um d20 sozinho avisa acerto crítico (20) e falha crítica (1) |
+| **`!d20`**, **`!5d6`**, **`!3d8`**... | 🎲 joga até 10 dados de até 100 lados (d100), mostra cada valor e a soma (ex.: `🎲 5d6: 3 + 6 + 1 + 4 + 2 = 16`). Um d20 sozinho avisa acerto crítico (20) e falha crítica (1) |
 
 Também funcionam `.s`, `/s`, `!fig` e `!sticker`. Quem está num cargo sem nenhuma permissão (como o Bloqueado)
 é ignorado em todos os comandos.
